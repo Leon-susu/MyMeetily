@@ -20,6 +20,18 @@ export const HistoryPage: React.FC = () => {
 
   useEffect(() => { void load(); }, []);
 
+  const open = async (action: 'report' | 'folder', path: string) => {
+    try {
+      if (action === 'report') {
+        await AppService().OpenHistoryReport(path);
+      } else {
+        await AppService().OpenOutputFolder(path);
+      }
+    } catch (error) {
+      setMessage(`開啟失敗：${String(error)}`);
+    }
+  };
+
   const filtered = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase('zh-TW');
     if (!keyword) return items;
@@ -45,8 +57,8 @@ export const HistoryPage: React.FC = () => {
                 <p style={{ margin: '10px 0 0', color: '#64748b', fontSize: 13, lineHeight: 1.6 }}>{item.summary || '這筆紀錄沒有可預覽的摘要。'}</p>
               </div>
               <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                <button onClick={() => void AppService().OpenHistoryReport(item.htmlPath)} style={primaryButton}>開啟報告</button>
-                <button onClick={() => void AppService().OpenOutputFolder(item.htmlPath)} style={secondaryButton}>開啟資料夾</button>
+                <button onClick={() => void open('report', item.htmlPath)} style={primaryButton}>開啟報告</button>
+                <button onClick={() => void open('folder', item.htmlPath)} style={secondaryButton}>開啟資料夾</button>
               </div>
             </div>
           </article>

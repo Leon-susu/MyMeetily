@@ -22,6 +22,7 @@ import (
 	"github.com/mymeetily/mymeetily/internal/diskspace"
 	"github.com/mymeetily/mymeetily/internal/hardware"
 	"github.com/mymeetily/mymeetily/internal/modelmanager"
+	"github.com/mymeetily/mymeetily/internal/processutil"
 	"github.com/mymeetily/mymeetily/internal/workflow"
 )
 
@@ -554,9 +555,19 @@ func (s *AppService) DeleteModel(kind, modelID string) error {
 	return nil
 }
 
-func (s *AppService) OpenOutputFolder(path string) {
-	dir := filepath.Dir(path)
-	runtime.BrowserOpenURL(s.ctx, "file:///"+filepath.ToSlash(dir))
+func (s *AppService) OpenOutputFolder(path string) error {
+	target, err := resolveHistoryTarget(s.GetPreferences().OutputDir, path)
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(target)
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return fmt.Errorf("找不到報告資料夾")
+	}
+	if err := processutil.OpenFolder(dir); err != nil {
+		return fmt.Errorf("開啟報告資料夾：%w", err)
+	}
+	return nil
 }
 
 func (s *AppService) ListMeetingHistory() ([]MeetingHistoryItem, error) {
@@ -633,23 +644,33 @@ func historyMetadata(markdown string) (source, summary string) {
 }
 
 func (s *AppService) OpenHistoryReport(path string) error {
-	root, err := filepath.Abs(s.GetPreferences().OutputDir)
+	target, err := resolveHistoryTarget(s.GetPreferences().OutputDir, path)
 	if err != nil {
 		return err
-	}
-	target, err := filepath.Abs(path)
-	if err != nil {
-		return err
-	}
-	relative, err := filepath.Rel(root, target)
-	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return fmt.Errorf("報告不在輸出資料夾內")
 	}
 	if info, err := os.Stat(target); err != nil || info.IsDir() {
 		return fmt.Errorf("找不到會議報告")
 	}
-	runtime.BrowserOpenURL(s.ctx, "file:///"+filepath.ToSlash(target))
+	if err := processutil.OpenPath(target); err != nil {
+		return fmt.Errorf("開啟會議報告：%w", err)
+	}
 	return nil
+}
+
+func resolveHistoryTarget(outputRoot, path string) (string, error) {
+	root, err := filepath.Abs(outputRoot)
+	if err != nil {
+		return "", err
+	}
+	target, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	relative, err := filepath.Rel(root, target)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("報告不在輸出資料夾內")
+	}
+	return target, nil
 }
 
 func (s *AppService) CopyToClipboard(text string) error {

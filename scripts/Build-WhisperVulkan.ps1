@@ -69,12 +69,21 @@ Enable-MsvcEnvironment
 $outputRoot = [IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
 
-$taskRoot = Join-Path ([IO.Path]::GetTempPath()) ("mymeetily-vulkan-" + [guid]::NewGuid().ToString("N"))
-$sdkRoot = Join-Path $taskRoot "VulkanSDK"
-$sourceRoot = Join-Path $taskRoot "whisper.cpp"
-$buildRoot = Join-Path $sourceRoot "build-vulkan"
-$packageRoot = Join-Path $taskRoot "package"
-$sdkInstaller = Join-Path $taskRoot "vulkan-sdk.exe"
+# whisper.cpp's Vulkan shader generator creates another CMake project below the
+# main build tree. MSVC has a 250-character object path limit, so GitHub's long
+# runner TEMP path can break the otherwise valid build. Keep every temporary
+# component deliberately short.
+$taskBase = if ($env:GITHUB_ACTIONS -eq "true") {
+    Join-Path $env:SystemDrive "mvk"
+} else {
+    Join-Path ([IO.Path]::GetTempPath()) "mvk"
+}
+$taskRoot = Join-Path $taskBase ([guid]::NewGuid().ToString("N").Substring(0, 8))
+$sdkRoot = Join-Path $taskRoot "v"
+$sourceRoot = Join-Path $taskRoot "w"
+$buildRoot = Join-Path $taskRoot "b"
+$packageRoot = Join-Path $taskRoot "p"
+$sdkInstaller = Join-Path $taskRoot "s.exe"
 $archiveName = "whisper-vulkan-$($WhisperVersion.TrimStart('v'))-bin-x64.zip"
 $archivePath = Join-Path $outputRoot $archiveName
 $checksumPath = "$archivePath.sha256"
@@ -174,9 +183,11 @@ try {
     Write-Host "Vulkan 引擎建置完成：$archivePath" -ForegroundColor Green
     Write-Host "SHA-256：$archiveHash" -ForegroundColor Green
 } finally {
-    $resolvedTemp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+    $resolvedBase = [IO.Path]::GetFullPath($taskBase).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
     $resolvedTask = [IO.Path]::GetFullPath($taskRoot)
-    if ($resolvedTask.StartsWith($resolvedTemp, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $resolvedTask)) {
+    if ($resolvedTask.StartsWith($resolvedBase, [StringComparison]::OrdinalIgnoreCase) -and
+        $resolvedTask -ne $resolvedBase.TrimEnd([IO.Path]::DirectorySeparatorChar) -and
+        (Test-Path -LiteralPath $resolvedTask)) {
         Remove-Item -LiteralPath $resolvedTask -Recurse -Force -ErrorAction SilentlyContinue
     }
 }

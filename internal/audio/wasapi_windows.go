@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -29,17 +30,20 @@ func ensureParentDir(path string) error {
 const wasapiLoopbackBufferDuration = wca.REFERENCE_TIME(400 * 10000)
 
 type wasapiRecorder struct {
-	mu            sync.Mutex
-	micDevice     string
-	speakerDevice string
-	outputPath    string
-	running       bool
-	startedAt     time.Time
-	cancel        context.CancelFunc
-	sessions      []*wasapiCaptureSession
-	tempDir       string
-	peakLevel        float32    // mic peak
-	speakerPeakLevel float32    // speaker loopback peak
+	mu               sync.Mutex
+	micDevice        string
+	speakerDevice    string
+	outputPath       string
+	running          bool
+	startedAt        time.Time
+	pausedAt         time.Time
+	pausedDuration   time.Duration
+	paused           atomic.Bool
+	cancel           context.CancelFunc
+	sessions         []*wasapiCaptureSession
+	tempDir          string
+	peakLevel        float32                   // mic peak
+	speakerPeakLevel float32                   // speaker loopback peak
 	onAudioData      func([]byte, AudioFormat) // tee callback for live transcription
 }
 
@@ -52,20 +56,21 @@ type wasapiCaptureSession struct {
 	ready       chan error
 	done        chan struct{}
 	err         error
-	micPeak     *float32   // pointer to recorder.peakLevel, nil for speaker sessions
+	micPeak     *float32                  // pointer to recorder.peakLevel, nil for speaker sessions
 	onAudioData func([]byte, AudioFormat) // tee callback for live transcription
+	paused      *atomic.Bool
 }
 
 func NewWASAPIRecorder(cfg RecorderConfig) (Recorder, error) {
 	if strings.TrimSpace(cfg.MicDevice) == "" {
-		return nil, fmt.Errorf("WASAPI 录音需要选择麦克风设备")
+		return nil, fmt.Errorf("WASAPI 錄音需要選擇麥克風裝置")
 	}
 
 	return &wasapiRecorder{
-		micDevice:    cfg.MicDevice,
+		micDevice:     cfg.MicDevice,
 		speakerDevice: cfg.SpeakerDevice,
-		outputPath:   cfg.OutputPath,
-		onAudioData:  cfg.OnAudioData,
+		outputPath:    cfg.OutputPath,
+		onAudioData:   cfg.OnAudioData,
 	}, nil
 }
 
@@ -97,18 +102,20 @@ func (r *wasapiRecorder) Start() error {
 			done:        make(chan struct{}),
 			micPeak:     &r.peakLevel,
 			onAudioData: r.onAudioData,
+			paused:      &r.paused,
 		},
 	}
 	if strings.TrimSpace(r.speakerDevice) != "" {
 		sessions = append(sessions, &wasapiCaptureSession{
-			name:        "speaker",
-				micPeak:     &r.speakerPeakLevel,
+			name:      "speaker",
+			micPeak:   &r.speakerPeakLevel,
 			selection: r.speakerDevice,
 			flow:      wca.ERender,
 			loopback:  true,
 			filePath:  filepath.Join(tempDir, "speaker.wav"),
 			ready:     make(chan error, 1),
 			done:      make(chan struct{}),
+			paused:    &r.paused,
 		})
 	}
 
@@ -130,12 +137,46 @@ func (r *wasapiRecorder) Start() error {
 			r.tempDir = ""
 			r.cancel = nil
 			r.sessions = nil
-			return fmt.Errorf("启动 %s WASAPI 录音失败: %w", session.name, err)
+			return fmt.Errorf("啟動 %s WASAPI 錄音失敗: %w", session.name, err)
 		}
 	}
 
 	r.running = true
 	r.startedAt = time.Now()
+	r.pausedAt = time.Time{}
+	r.pausedDuration = 0
+	r.paused.Store(false)
+	return nil
+}
+
+func (r *wasapiRecorder) Pause() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.running {
+		return fmt.Errorf("not recording")
+	}
+	if r.paused.Load() {
+		return nil
+	}
+	r.pausedAt = time.Now()
+	r.paused.Store(true)
+	r.peakLevel = 0
+	r.speakerPeakLevel = 0
+	return nil
+}
+
+func (r *wasapiRecorder) Resume() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.running {
+		return fmt.Errorf("not recording")
+	}
+	if !r.paused.Load() {
+		return nil
+	}
+	r.pausedDuration += time.Since(r.pausedAt)
+	r.pausedAt = time.Time{}
+	r.paused.Store(false)
 	return nil
 }
 
@@ -151,6 +192,11 @@ func (r *wasapiRecorder) Stop() error {
 	tempDir := r.tempDir
 	outputPath := r.outputPath
 	r.running = false
+	if r.paused.Load() {
+		r.pausedDuration += time.Since(r.pausedAt)
+		r.pausedAt = time.Time{}
+		r.paused.Store(false)
+	}
 	r.cancel = nil
 	r.mu.Unlock()
 
@@ -162,7 +208,7 @@ func (r *wasapiRecorder) Stop() error {
 	for _, session := range sessions {
 		if session.err != nil {
 			_ = os.RemoveAll(tempDir)
-			return fmt.Errorf("%s WASAPI 录音失败: %w", session.name, session.err)
+			return fmt.Errorf("%s WASAPI 錄音失敗: %w", session.name, session.err)
 		}
 	}
 
@@ -194,13 +240,24 @@ func (r *wasapiRecorder) IsRunning() bool {
 	return r.running
 }
 
+func (r *wasapiRecorder) IsPaused() bool {
+	return r.paused.Load()
+}
+
 func (r *wasapiRecorder) Elapsed() time.Duration {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if !r.running {
 		return 0
 	}
-	return time.Since(r.startedAt)
+	elapsed := time.Since(r.startedAt) - r.pausedDuration
+	if r.paused.Load() {
+		elapsed -= time.Since(r.pausedAt)
+	}
+	if elapsed < 0 {
+		return 0
+	}
+	return elapsed
 }
 
 func (r *wasapiRecorder) OutputPath() string {
@@ -279,7 +336,7 @@ func (s *wasapiCaptureSession) capture(ctx context.Context) error {
 		default:
 		}
 
-		if err := captureWASAPIPacket(captureClient, writer, format, s.micPeak, s.onAudioData); err != nil {
+		if err := captureWASAPIPacket(captureClient, writer, format, s.micPeak, s.onAudioData, s.paused); err != nil {
 			return err
 		}
 
@@ -309,9 +366,17 @@ func initializeWASAPIAudioClient(device *wca.IMMDevice, loopback bool) (*wca.IAu
 		return nil, nil, 0, err
 	}
 
+	// Many notebook microphone arrays expose a 32-bit, four-channel
+	// WAVE_FORMAT_EXTENSIBLE mix format. Merely changing its tag to PCM leaves
+	// an invalid combination and causes IAudioClient.Initialize to return
+	// E_INVALIDARG. Ask the Windows audio engine to convert both microphone and
+	// loopback streams to the format MyMeetily and whisper.cpp actually need.
 	format.WFormatTag = 1
-	format.NBlockAlign = (format.WBitsPerSample / 8) * format.NChannels
-	format.NAvgBytesPerSec = format.NSamplesPerSec * uint32(format.NBlockAlign)
+	format.NChannels = 1
+	format.NSamplesPerSec = 16000
+	format.WBitsPerSample = 16
+	format.NBlockAlign = 2
+	format.NAvgBytesPerSec = 32000
 	format.CbSize = 0
 
 	var defaultPeriod wca.REFERENCE_TIME
@@ -323,7 +388,7 @@ func initializeWASAPIAudioClient(device *wca.IMMDevice, loopback bool) (*wca.IAu
 	}
 
 	latency := time.Duration(int(defaultPeriod) * 100)
-	streamFlags := uint32(0)
+	streamFlags := uint32(wca.AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | wca.AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY)
 	bufferDuration := defaultPeriod
 	if loopback {
 		streamFlags = wca.AUDCLNT_STREAMFLAGS_LOOPBACK
@@ -339,7 +404,7 @@ func initializeWASAPIAudioClient(device *wca.IMMDevice, loopback bool) (*wca.IAu
 	return client, format, latency, nil
 }
 
-func captureWASAPIPacket(captureClient *wca.IAudioCaptureClient, writer *wavFileWriter, format *wca.WAVEFORMATEX, peakLevel *float32, onAudioData func([]byte, AudioFormat)) error {
+func captureWASAPIPacket(captureClient *wca.IAudioCaptureClient, writer *wavFileWriter, format *wca.WAVEFORMATEX, peakLevel *float32, onAudioData func([]byte, AudioFormat), paused *atomic.Bool) error {
 	var data *byte
 	var frames uint32
 	var flags uint32
@@ -353,6 +418,12 @@ func captureWASAPIPacket(captureClient *wca.IAudioCaptureClient, writer *wavFile
 		return nil
 	}
 	defer captureClient.ReleaseBuffer(frames)
+	if paused != nil && paused.Load() {
+		if peakLevel != nil {
+			*peakLevel = 0
+		}
+		return nil
+	}
 
 	bytesPerFrame := int(format.NBlockAlign)
 	byteCount := int(frames) * bytesPerFrame
@@ -447,7 +518,7 @@ func computePeakLevel(buf []byte, format *wca.WAVEFORMATEX) float32 {
 // For dual sessions (mic + speaker), PCM data is mixed in pure Go.
 func finalizeWASAPIOutput(sessions []*wasapiCaptureSession, outputPath string) error {
 	if len(sessions) == 0 {
-		return fmt.Errorf("没有可用的 WASAPI 录音数据")
+		return fmt.Errorf("沒有可用的 WASAPI 錄音資料")
 	}
 
 	if len(sessions) == 1 {
@@ -471,18 +542,18 @@ func finalizeWASAPIOutput(sessions []*wasapiCaptureSession, outputPath string) e
 func mixWAVToPath(pathA, pathB, outputPath string) error {
 	samplesA, srA, chA, bitsA, err := readWAV(pathA)
 	if err != nil {
-		return fmt.Errorf("读取麦克风录音: %w", err)
+		return fmt.Errorf("讀取麥克風錄音: %w", err)
 	}
 	samplesB, srB, chB, bitsB, err := readWAV(pathB)
 	if err != nil {
-		return fmt.Errorf("读取系统音频录音: %w", err)
+		return fmt.Errorf("讀取系統音訊錄音: %w", err)
 	}
 
 	sampleRate := srA
 	channels := chA
 	bitsPerSample := bitsA
 	if srB != srA || chB != chA || bitsB != bitsA {
-		return fmt.Errorf("音频格式不一致: mic=%dHz/%dch/%dbit speaker=%dHz/%dch/%dbit",
+		return fmt.Errorf("音訊格式不一致: mic=%dHz/%dch/%dbit speaker=%dHz/%dch/%dbit",
 			srA, chA, bitsA, srB, chB, bitsB)
 	}
 
@@ -529,13 +600,13 @@ func readWAV(path string) (samples []int16, sampleRate, channels, bitsPerSample 
 		case "fmt ":
 			audioFormat := binary.LittleEndian.Uint16(data[pos+8 : pos+10])
 			if audioFormat != 1 && audioFormat != 3 {
-				return nil, 0, 0, 0, fmt.Errorf("只支持 PCM/IEEE float 格式，当前格式=%d", audioFormat)
+				return nil, 0, 0, 0, fmt.Errorf("僅支援 PCM/IEEE float 格式，目前格式=%d", audioFormat)
 			}
 			channels = int(binary.LittleEndian.Uint16(data[pos+10 : pos+12]))
 			sampleRate = int(binary.LittleEndian.Uint32(data[pos+12 : pos+16]))
 			bps := int(binary.LittleEndian.Uint16(data[pos+22 : pos+24]))
 			if bps != 16 && bps != 32 {
-				return nil, 0, 0, 0, fmt.Errorf("只支持 16-bit 或 32-bit，当前=%d", bps)
+				return nil, 0, 0, 0, fmt.Errorf("僅支援 16-bit 或 32-bit，目前=%d", bps)
 			}
 			// Always report 16-bit since we normalize to int16 below.
 			bitsPerSample = 16

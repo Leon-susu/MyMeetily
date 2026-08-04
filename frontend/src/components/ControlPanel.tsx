@@ -1,5 +1,5 @@
 // =============================================================================
-// MyMeetily — ControlPanel (录音/停止按钮)
+// MyMeetily — ControlPanel (錄音/停止按钮)
 // =============================================================================
 
 import React, { useState } from 'react';
@@ -55,6 +55,18 @@ const STYLE: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     marginBottom: 8,
   },
+  pauseBtn: {
+    width: '100%',
+    padding: '12px 0',
+    borderRadius: 8,
+    border: '1px solid #fde68a',
+    background: '#fffbeb',
+    color: '#b45309',
+    fontSize: 15,
+    fontWeight: 600,
+    cursor: 'pointer',
+    marginBottom: 8,
+  },
   importBtn: {
     width: '100%',
     padding: '8px 0',
@@ -88,7 +100,7 @@ function formatTime(seconds: number): string {
 }
 
 export const ControlPanel: React.FC = () => {
-  const { phase, isRecording, elapsed, selectedMic } = useAppState();
+  const { phase, isRecording, isPaused, elapsed, selectedMic, selectedSpeaker } = useAppState();
   const dispatch = useAppDispatch();
   const [error, setError] = useState('');
   const [stopping, setStopping] = useState(false);
@@ -98,10 +110,9 @@ export const ControlPanel: React.FC = () => {
     if (!window.go || !selectedMic) return;
     setError('');
     try {
-      const speaker = ''; // Use selected speaker from state
-      await RecordService().StartRecording(selectedMic, speaker);
+      await RecordService().StartRecording(selectedMic, selectedSpeaker);
     } catch (e: any) {
-      setError(e?.message || '录音启动失败');
+      setError(typeof e === 'string' ? e : e?.message || '錄音啟動失敗');
     }
   };
 
@@ -114,18 +125,32 @@ export const ControlPanel: React.FC = () => {
       if (outputPath) {
         // Start pipeline automatically
         dispatch({ type: 'SET_PHASE', phase: 'processing' });
-        dispatch({ type: 'SET_CURRENT_STAGE', stage: '音频预处理' });
+        dispatch({ type: 'SET_CURRENT_STAGE', stage: '音訊預處理' });
         try {
           await PipelineService().RunPipeline(outputPath);
         } catch (e: any) {
           // Pipeline error is handled by events
-          setError(e?.message || '处理失败');
+          setError(e?.message || '處理失敗');
         }
       }
     } catch (e: any) {
-      setError(e?.message || '停止录音失败');
+      setError(typeof e === 'string' ? e : e?.message || '停止錄音失敗');
     } finally {
       setStopping(false);
+    }
+  };
+
+  const handlePauseResume = async () => {
+    if (!window.go) return;
+    setError('');
+    try {
+      if (isPaused) {
+        await RecordService().ResumeRecording();
+      } else {
+        await RecordService().PauseRecording();
+      }
+    } catch (e: any) {
+      setError(typeof e === 'string' ? e : e?.message || (isPaused ? '繼續錄音失敗' : '暫停錄音失敗'));
     }
   };
 
@@ -141,14 +166,14 @@ export const ControlPanel: React.FC = () => {
       }
       // Start pipeline with imported file
       dispatch({ type: 'SET_PHASE', phase: 'processing' });
-      dispatch({ type: 'SET_CURRENT_STAGE', stage: '音频预处理' });
+      dispatch({ type: 'SET_CURRENT_STAGE', stage: '音訊預處理' });
       try {
         await PipelineService().ImportAudioFile(filePath);
       } catch (e: any) {
-        setError(e?.message || '处理失败');
+        setError(e?.message || '處理失敗');
       }
     } catch (e: any) {
-      setError(e?.message || '导入失败');
+      setError(e?.message || '匯入失敗');
     } finally {
       setImporting(false);
     }
@@ -171,16 +196,21 @@ export const ControlPanel: React.FC = () => {
           disabled={phase !== 'ready' || !selectedMic}
           onClick={handleStart}
         >
-          ● 开始录音
+          ● 開始錄音
         </button>
       ) : (
-        <button
-          style={STYLE.stopBtn}
-          onClick={handleStop}
-          disabled={stopping}
-        >
-          {stopping ? '正在保存...' : '■ 停止录音'}
-        </button>
+        <>
+          <button style={STYLE.pauseBtn} onClick={handlePauseResume} disabled={stopping}>
+            {isPaused ? '▶ 繼續錄音' : 'Ⅱ 暫停錄音'}
+          </button>
+          <button
+            style={STYLE.stopBtn}
+            onClick={handleStop}
+            disabled={stopping}
+          >
+            {stopping ? '正在儲存...' : '■ 停止並處理'}
+          </button>
+        </>
       )}
 
       {/* Import audio file — available when not recording */}
@@ -193,7 +223,7 @@ export const ControlPanel: React.FC = () => {
           disabled={importing || phase === 'processing'}
           onClick={handleImport}
         >
-          {importing ? '导入中...' : '📂 导入音频文件'}
+          {importing ? '匯入中...' : '📂 匯入音訊檔案'}
         </button>
       )}
 

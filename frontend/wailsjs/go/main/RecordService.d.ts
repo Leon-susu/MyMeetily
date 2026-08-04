@@ -5,6 +5,10 @@ export function GetElapsed():Promise<number>;
 
 export function IsRecording():Promise<boolean>;
 
+export function PauseRecording():Promise<void>;
+
+export function ResumeRecording():Promise<void>;
+
 export function StartRecording(arg1:string,arg2:string):Promise<void>;
 
 export function StopRecording():Promise<string>;

@@ -8,8 +8,11 @@ import (
 // Recorder captures audio from one or more sources and writes it to a file.
 type Recorder interface {
 	Start() error
+	Pause() error
+	Resume() error
 	Stop() error
 	IsRunning() bool
+	IsPaused() bool
 	Elapsed() time.Duration
 	OutputPath() string
 	// PeakLevel returns the current mic input level (0.0 = silent, 1.0 = clipping).

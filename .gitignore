@@ -2,6 +2,10 @@
 mymeetily
 mymeetily.exe
 dist/
+build/
+.gotmp/
+frontend/dist/
+frontend/node_modules/
 
 # Models (downloaded by user or auto-downloaded)
 llmmodels/whisper/*.bin

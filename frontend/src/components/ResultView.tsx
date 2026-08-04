@@ -1,5 +1,5 @@
 // =============================================================================
-// MyMeetily — ResultView (会议纪要展示)
+// MyMeetily — ResultView (會議紀要展示)
 // =============================================================================
 
 import React, { useState } from 'react';
@@ -223,27 +223,27 @@ export const ResultView: React.FC = () => {
   const handleCopySummary = async () => {
     try {
       await AppService().CopyToClipboard(meetingState.meetingNotes || meetingState.summaryContent);
-      dispatch({ type: 'SET_ACTION_STATUS', status: '已复制会议纪要', error: false });
+      dispatch({ type: 'SET_ACTION_STATUS', status: '已複製會議紀要', error: false });
     } catch {
-      dispatch({ type: 'SET_ACTION_STATUS', status: '复制失败', error: true });
+      dispatch({ type: 'SET_ACTION_STATUS', status: '複製失敗', error: true });
     }
   };
 
   const handleCopyTranscript = async () => {
     try {
       await AppService().CopyToClipboard(meetingState.rawTranscript);
-      dispatch({ type: 'SET_ACTION_STATUS', status: '已复制转写文本', error: false });
+      dispatch({ type: 'SET_ACTION_STATUS', status: '已複製轉寫文字', error: false });
     } catch {
-      dispatch({ type: 'SET_ACTION_STATUS', status: '复制失败', error: true });
+      dispatch({ type: 'SET_ACTION_STATUS', status: '複製失敗', error: true });
     }
   };
 
   const handleOpenFolder = async () => {
     try {
       await AppService().OpenOutputFolder(meetingState.htmlOutputPath || meetingState.outputPath);
-      dispatch({ type: 'SET_ACTION_STATUS', status: '已打开输出目录', error: false });
+      dispatch({ type: 'SET_ACTION_STATUS', status: '已開啟輸出資料夾', error: false });
     } catch {
-      dispatch({ type: 'SET_ACTION_STATUS', status: '打开失败', error: true });
+      dispatch({ type: 'SET_ACTION_STATUS', status: '開啟失敗', error: true });
     }
   };
 
@@ -251,9 +251,9 @@ export const ResultView: React.FC = () => {
     setRetrying(true);
     try {
       await PipelineService().RetrySummary();
-      dispatch({ type: 'SET_ACTION_STATUS', status: '摘要已重新生成', error: false });
+      dispatch({ type: 'SET_ACTION_STATUS', status: '摘要已重新產生', error: false });
     } catch {
-      dispatch({ type: 'SET_ACTION_STATUS', status: '重试失败', error: true });
+      dispatch({ type: 'SET_ACTION_STATUS', status: '重試失敗', error: true });
     } finally {
       setRetrying(false);
     }
@@ -275,27 +275,27 @@ export const ResultView: React.FC = () => {
     <div style={STYLE.container}>
       <div style={STYLE.header}>
         <div>
-          <div style={STYLE.title}>会议纪要</div>
+          <div style={STYLE.title}>會議紀要</div>
           <div style={STYLE.stats}>
-            时长 {formatDuration(meetingState.audioDuration)} | 语言 {meetingState.language} | 转写 {meetingState.rawTranscript?.length || 0} 字
+            時長 {formatDuration(meetingState.audioDuration)} | 語言 {meetingState.language} | 轉寫 {meetingState.rawTranscript?.length || 0} 字
           </div>
         </div>
         <div style={STYLE.actions}>
-          <button style={STYLE.actionBtn} onClick={handleCopySummary} title="复制纪要">📋 纪要</button>
-          <button style={STYLE.actionBtn} onClick={handleCopyTranscript} title="复制转写">📝 转写</button>
-          <button style={STYLE.actionBtn} onClick={handleOpenFolder} title="打开目录">📂</button>
+          <button style={STYLE.actionBtn} onClick={handleCopySummary} title="複製紀要">📋 紀要</button>
+          <button style={STYLE.actionBtn} onClick={handleCopyTranscript} title="複製轉寫">📝 轉寫</button>
+          <button style={STYLE.actionBtn} onClick={handleOpenFolder} title="開啟資料夾">📂</button>
           {(!meetingState.summaryEnabled || meetingState.summaryError) && (
             <button style={STYLE.actionBtn} onClick={handleRetry} disabled={retrying}>
-              {retrying ? '重试中...' : '🔄 重试'}
+              {retrying ? '重試中...' : '🔄 重試'}
             </button>
           )}
-          <button style={STYLE.primaryBtn} onClick={handleNewRecording}>新建录音</button>
+          <button style={STYLE.primaryBtn} onClick={handleNewRecording}>新增錄音</button>
         </div>
       </div>
 
       {meetingState.summaryError && (
         <div style={{ ...STYLE.error, margin: '0 20px', marginTop: 12 }}>
-          摘要生成失败: {meetingState.summaryError}
+          摘要產生失敗: {meetingState.summaryError}
         </div>
       )}
 
@@ -317,7 +317,7 @@ export const ResultView: React.FC = () => {
         </div>
 
         <div style={STYLE.files}>
-          <div style={STYLE.fileTitle}>已生成文件</div>
+          <div style={STYLE.fileTitle}>已產生檔案</div>
           {meetingState.htmlOutputPath && (
             <div style={STYLE.fileItem}>📄 HTML: {meetingState.htmlOutputPath}</div>
           )}
@@ -325,7 +325,7 @@ export const ResultView: React.FC = () => {
             <div style={STYLE.fileItem}>📝 Markdown: {meetingState.markdownPath}</div>
           )}
           {meetingState.transcriptPath && (
-            <div style={STYLE.fileItem}>📃 转写: {meetingState.transcriptPath}</div>
+            <div style={STYLE.fileItem}>📃 轉寫: {meetingState.transcriptPath}</div>
           )}
         </div>
       </div>

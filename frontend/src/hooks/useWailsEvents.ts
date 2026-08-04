@@ -7,7 +7,8 @@ import { useAppDispatch } from './useAppState';
 import type {
   RecordStartedPayload, RecordStoppedPayload, PeakLevelPayload,
   TranscriptPayload, PipelineProgressPayload, AppStatusPayload,
-  DependencyStatus, MeetingState, AppInfo, DeviceInfo
+  DependencyStatus, MeetingState, AppInfo, DeviceInfo, Preferences, ModelOption,
+  ModelCatalogItem, HardwareProfile, MeetingHistoryItem
 } from '../types';
 
 // Wails runtime — these are available globally when running in Wails
@@ -20,6 +21,18 @@ declare global {
         };
         AppService: {
           GetAppInfo: () => Promise<AppInfo>;
+          GetPreferences: () => Promise<Preferences>;
+          SavePreferences: (preferences: Preferences) => Promise<void>;
+          ListWhisperModels: () => Promise<ModelOption[]>;
+          ListOllamaModels: () => Promise<ModelOption[]>;
+          ListModelCatalog: () => Promise<ModelCatalogItem[]>;
+          GetHardwareProfile: () => Promise<HardwareProfile>;
+          InstallWhisperModel: (modelId: string) => Promise<void>;
+          InstallOllamaModel: (modelId: string) => Promise<void>;
+          CancelModelOperation: () => Promise<void>;
+          DeleteModel: (kind: string, modelId: string) => Promise<void>;
+          ListMeetingHistory: () => Promise<MeetingHistoryItem[]>;
+          OpenHistoryReport: (path: string) => Promise<void>;
           OpenOutputFolder: (path: string) => Promise<void>;
           CopyToClipboard: (text: string) => Promise<void>;
           OpenFileDialog: () => Promise<string>;
@@ -30,6 +43,8 @@ declare global {
         };
         RecordService: {
           StartRecording: (mic: string, speaker: string) => Promise<void>;
+          PauseRecording: () => Promise<void>;
+          ResumeRecording: () => Promise<void>;
           StopRecording: () => Promise<string>;
           IsRecording: () => Promise<boolean>;
           GetElapsed: () => Promise<number>;
@@ -38,6 +53,7 @@ declare global {
           RunPipeline: (audioPath: string) => Promise<void>;
           RetrySummary: () => Promise<void>;
           ImportAudioFile: (filePath: string) => Promise<void>;
+          CancelPipeline: () => Promise<void>;
         };
         ResultService: {
           GetState: () => Promise<MeetingState | null>;
@@ -49,6 +65,7 @@ declare global {
       EventsOff: (event: string) => void;
       EventsOnce: (event: string, callback: (...args: any[]) => void) => void;
       EventsEmit: (event: string, data?: any) => void;
+      BrowserOpenURL: (url: string) => void;
     };
   }
 }
@@ -96,6 +113,27 @@ export function useWailsEvents() {
       });
     });
 
+    window.runtime.EventsOn('settings:changed', (payload: AppInfo) => {
+      dispatch({ type: 'SET_APP_INFO', appInfo: payload });
+    });
+
+    // Startup events can be emitted before React subscribes to them. Query the
+    // already-bound backend once after subscriptions are installed so the UI
+    // cannot remain in the "checking" phase forever after a fast startup.
+    void AppService().GetAppInfo().then((payload: AppInfo) => {
+      dispatch({
+        type: 'SET_DEPS',
+        deps: {
+          whisperBinary: { ok: true, message: '' },
+          whisperModel: { ok: true, message: '' },
+          ollama: { ok: true, message: '' },
+          summaryEnabled: true,
+        },
+        appInfo: payload,
+      });
+      dispatch({ type: 'SET_PHASE', phase: 'ready' });
+    }).catch(() => undefined);
+
     // ---- Recording ----
     window.runtime.EventsOn('record:started', (payload: RecordStartedPayload) => {
       dispatch({ type: 'RECORDING_STARTED', outputPath: payload.outputPath });
@@ -103,6 +141,14 @@ export function useWailsEvents() {
 
     window.runtime.EventsOn('record:stopped', () => {
       dispatch({ type: 'RECORDING_STOPPED' });
+    });
+
+    window.runtime.EventsOn('record:paused', () => {
+      dispatch({ type: 'RECORDING_PAUSED' });
+    });
+
+    window.runtime.EventsOn('record:resumed', () => {
+      dispatch({ type: 'RECORDING_RESUMED' });
     });
 
     window.runtime.EventsOn('record:peaklevel', (payload: PeakLevelPayload) => {
@@ -127,19 +173,27 @@ export function useWailsEvents() {
       dispatch({ type: 'PIPELINE_ERROR', error: payload.error });
     });
 
+    window.runtime.EventsOn('pipeline:cancelled', (payload: { message: string }) => {
+      dispatch({ type: 'PIPELINE_CANCELLED', message: payload.message });
+    });
+
     // Cleanup
     return () => {
       if (!window.runtime) return;
       window.runtime.EventsOff('app:status');
       window.runtime.EventsOff('app:dependency');
       window.runtime.EventsOff('app:info');
+      window.runtime.EventsOff('settings:changed');
       window.runtime.EventsOff('record:started');
       window.runtime.EventsOff('record:stopped');
+      window.runtime.EventsOff('record:paused');
+      window.runtime.EventsOff('record:resumed');
       window.runtime.EventsOff('record:peaklevel');
       window.runtime.EventsOff('record:transcript');
       window.runtime.EventsOff('pipeline:progress');
       window.runtime.EventsOff('pipeline:done');
       window.runtime.EventsOff('pipeline:error');
+      window.runtime.EventsOff('pipeline:cancelled');
     };
   }, [dispatch]);
 }

@@ -24,6 +24,7 @@ export interface AppState {
 
   // Recording
   isRecording: boolean;
+  isPaused: boolean;
   elapsed: number;
   peakLevel: number;
   transcripts: TranscriptLine[];
@@ -41,10 +42,10 @@ export interface AppState {
 
 // ---- Default State ----
 export const defaultStages: StageStatus[] = [
-  { name: '音频预处理', status: 'pending' },
-  { name: '语音识别',     status: 'pending' },
+  { name: '音訊預處理', status: 'pending' },
+  { name: '語音辨識',     status: 'pending' },
   { name: 'LLM 整理',    status: 'pending' },
-  { name: '生成输出',     status: 'pending' },
+  { name: '產生輸出',     status: 'pending' },
 ];
 
 export const initialState: AppState = {
@@ -56,6 +57,7 @@ export const initialState: AppState = {
   deps: null,
   appInfo: null,
   isRecording: false,
+  isPaused: false,
   elapsed: 0,
   peakLevel: 0,
   transcripts: [],
@@ -75,13 +77,17 @@ export type AppAction =
   | { type: 'SELECT_MIC'; device: string }
   | { type: 'SELECT_SPEAKER'; device: string }
   | { type: 'SET_DEPS'; deps: DependencyStatus; appInfo: AppState['appInfo'] }
+  | { type: 'SET_APP_INFO'; appInfo: AppState['appInfo'] }
   | { type: 'RECORDING_STARTED'; outputPath: string }
   | { type: 'RECORDING_STOPPED' }
+  | { type: 'RECORDING_PAUSED' }
+  | { type: 'RECORDING_RESUMED' }
   | { type: 'SET_PEAK_LEVEL'; level: number; elapsed: number }
   | { type: 'ADD_TRANSCRIPT'; text: string }
   | { type: 'SET_CURRENT_STAGE'; stage: string }
   | { type: 'PIPELINE_DONE'; meetingState: MeetingState }
   | { type: 'PIPELINE_ERROR'; error: string }
+  | { type: 'PIPELINE_CANCELLED'; message: string }
   | { type: 'SET_ACTION_STATUS'; status: string; error: boolean }
   | { type: 'RESET' };
 
@@ -111,11 +117,15 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         phase: action.deps.summaryEnabled ? 'ready' : 'ready',
       };
 
+    case 'SET_APP_INFO':
+      return { ...state, appInfo: action.appInfo };
+
     case 'RECORDING_STARTED':
       return {
         ...state,
         phase: 'recording',
         isRecording: true,
+        isPaused: false,
         elapsed: 0,
         peakLevel: 0,
         transcripts: [],
@@ -123,7 +133,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
 
     case 'RECORDING_STOPPED':
-      return { ...state, isRecording: false };
+      return { ...state, isRecording: false, isPaused: false };
+
+    case 'RECORDING_PAUSED':
+      return { ...state, isPaused: true, peakLevel: 0 };
+
+    case 'RECORDING_RESUMED':
+      return { ...state, isPaused: false };
 
     case 'SET_PEAK_LEVEL':
       return { ...state, peakLevel: action.level, elapsed: action.elapsed };
@@ -139,7 +155,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'SET_CURRENT_STAGE': {
-      const stageIndex = state.stages.findIndex(s => s.name === action.stage);
+      const stageIndex = state.stages.findIndex(s => action.stage.startsWith(s.name));
       const updatedStages = state.stages.map((s, i) => ({
         ...s,
         status: i < stageIndex ? 'done' as const : i === stageIndex ? 'active' as const : 'pending' as const,
@@ -162,6 +178,16 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         actionStatus: action.error,
         actionError: true,
         meetingState: null,
+      };
+
+    case 'PIPELINE_CANCELLED':
+      return {
+        ...state,
+        phase: 'ready',
+        actionStatus: action.message,
+        actionError: false,
+        meetingState: null,
+        stages: initialState.stages,
       };
 
     case 'SET_ACTION_STATUS':

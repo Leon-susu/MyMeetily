@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/mymeetily/mymeetily/internal/hardware"
 	"github.com/mymeetily/mymeetily/internal/layout"
 )
 
@@ -43,6 +44,7 @@ func TestWhisperAssetName(t *testing.T) {
 	tests := map[string]string{
 		"cpu":         "whisper-bin-x64.zip",
 		"blas":        "whisper-blas-bin-x64.zip",
+		"vulkan":      vulkanAssetName,
 		"cuda-11.8":   "whisper-cublas-11.8.0-bin-x64.zip",
 		"cuda-12.4":   "whisper-cublas-12.4.0-bin-x64.zip",
 		"cublas-12.4": "whisper-cublas-12.4.0-bin-x64.zip",
@@ -139,7 +141,7 @@ func TestResolveEngineArchiveSourceLocalZip(t *testing.T) {
 		t.Fatalf("write local zip: %v", err)
 	}
 
-	source, err := resolveEngineArchiveSource("https://example.invalid/download.zip", localZip, "")
+	source, err := resolveEngineArchiveSource("https://example.invalid/download.zip", localZip, "", "not-used-for-local")
 	if err != nil {
 		t.Fatalf("resolveEngineArchiveSource: %v", err)
 	}
@@ -175,5 +177,31 @@ func createZipArchive(t *testing.T, zipPath string, entries map[string]string) {
 	}
 	if err := file.Close(); err != nil {
 		t.Fatalf("close zip file: %v", err)
+	}
+}
+
+func TestRecommendedWhisperVariant(t *testing.T) {
+	if got := recommendedWhisperVariant(hardware.Profile{HasNVIDIA: true, HasAMD: true}); got != "cuda-12.4" {
+		t.Fatalf("NVIDIA variant = %q, want cuda-12.4", got)
+	}
+	if got := recommendedWhisperVariant(hardware.Profile{HasAMD: true, VulkanRuntime: true}); got != "vulkan" {
+		t.Fatalf("AMD Vulkan variant = %q, want vulkan", got)
+	}
+	if got := recommendedWhisperVariant(hardware.Profile{HasAMD: true}); got != "cpu" {
+		t.Fatalf("AMD without Vulkan variant = %q, want cpu", got)
+	}
+}
+
+func TestVerifyFileSHA256(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "archive.zip")
+	if err := os.WriteFile(path, []byte("abc"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const sha = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+	if err := verifyFileSHA256(path, sha); err != nil {
+		t.Fatalf("verifyFileSHA256(valid): %v", err)
+	}
+	if err := verifyFileSHA256(path, "0000000000000000000000000000000000000000000000000000000000000000"); err == nil {
+		t.Fatal("verifyFileSHA256(invalid) returned nil")
 	}
 }

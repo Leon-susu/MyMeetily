@@ -79,6 +79,45 @@ export namespace agent {
 
 }
 
+export namespace hardware {
+	
+	export class Profile {
+	    cpuThreads: number;
+	    architecture: string;
+	    gpus: string[];
+	    hasNvidia: boolean;
+	    hasAmd: boolean;
+	    hasIntel: boolean;
+	    vulkanRuntime: boolean;
+	    recommendedEngine: string;
+	    recommendedModel: string;
+	    recommendation: string;
+	    driverAdvice: string;
+	    driverUrl: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Profile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.cpuThreads = source["cpuThreads"];
+	        this.architecture = source["architecture"];
+	        this.gpus = source["gpus"];
+	        this.hasNvidia = source["hasNvidia"];
+	        this.hasAmd = source["hasAmd"];
+	        this.hasIntel = source["hasIntel"];
+	        this.vulkanRuntime = source["vulkanRuntime"];
+	        this.recommendedEngine = source["recommendedEngine"];
+	        this.recommendedModel = source["recommendedModel"];
+	        this.recommendation = source["recommendation"];
+	        this.driverAdvice = source["driverAdvice"];
+	        this.driverUrl = source["driverUrl"];
+	    }
+	}
+
+}
+
 export namespace main {
 	
 	export class AppInfo {
@@ -111,6 +150,100 @@ export namespace main {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.type = source["type"];
+	    }
+	}
+	export class MeetingHistoryItem {
+	    id: string;
+	    title: string;
+	    sourceAudio: string;
+	    generatedAt: string;
+	    summary: string;
+	    htmlPath: string;
+	    markdownPath: string;
+	    transcriptPath: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MeetingHistoryItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.sourceAudio = source["sourceAudio"];
+	        this.generatedAt = source["generatedAt"];
+	        this.summary = source["summary"];
+	        this.htmlPath = source["htmlPath"];
+	        this.markdownPath = source["markdownPath"];
+	        this.transcriptPath = source["transcriptPath"];
+	    }
+	}
+	export class ModelCatalogItem {
+	    id: string;
+	    kind: string;
+	    name: string;
+	    path: string;
+	    size: number;
+	    description: string;
+	    installed: boolean;
+	    active: boolean;
+	    recommended: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelCatalogItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.kind = source["kind"];
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.size = source["size"];
+	        this.description = source["description"];
+	        this.installed = source["installed"];
+	        this.active = source["active"];
+	        this.recommended = source["recommended"];
+	    }
+	}
+	export class ModelOption {
+	    name: string;
+	    path: string;
+	    size: number;
+	    active: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelOption(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.size = source["size"];
+	        this.active = source["active"];
+	    }
+	}
+	export class Preferences {
+	    whisperModel: string;
+	    ollamaModel: string;
+	    language: string;
+	    outputDir: string;
+	    temperature: number;
+	    maxTokens: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Preferences(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.whisperModel = source["whisperModel"];
+	        this.ollamaModel = source["ollamaModel"];
+	        this.language = source["language"];
+	        this.outputDir = source["outputDir"];
+	        this.temperature = source["temperature"];
+	        this.maxTokens = source["maxTokens"];
 	    }
 	}
 

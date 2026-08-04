@@ -4,6 +4,7 @@
 
 import React from 'react';
 import { useAppState } from '../hooks/useAppState';
+import { PipelineService } from '../hooks/useWailsEvents';
 
 const STYLE: Record<string, React.CSSProperties> = {
   container: {
@@ -71,12 +72,13 @@ function stageStyle(status: string): React.CSSProperties {
 }
 
 export const ProgressView: React.FC = () => {
-  const { stages } = useAppState();
+  const { stages, currentStage } = useAppState();
+  const [cancelling, setCancelling] = React.useState(false);
 
   return (
     <div style={STYLE.container}>
       <div style={STYLE.spinner} />
-      <div style={STYLE.title}>AI 正在处理会议记录...</div>
+      <div style={STYLE.title}>AI 正在處理會議記錄...</div>
       <div style={STYLE.stages}>
         {stages.map((stage, i) => (
           <React.Fragment key={stage.name}>
@@ -90,7 +92,14 @@ export const ProgressView: React.FC = () => {
           </React.Fragment>
         ))}
       </div>
-      <div style={STYLE.hint}>处理过程中请勿关闭窗口</div>
+      <div style={STYLE.hint}>{currentStage || '處理期間請勿關閉視窗'}</div>
+      <button
+        disabled={cancelling}
+        onClick={() => { setCancelling(true); void PipelineService().CancelPipeline(); }}
+        style={{ marginTop: 20, padding: '9px 16px', borderRadius: 8, border: '1px solid #fecaca', background: '#fff', color: '#dc2626', cursor: cancelling ? 'wait' : 'pointer' }}
+      >
+        {cancelling ? '正在取消…' : '取消處理'}
+      </button>
     </div>
   );
 };

@@ -1,5 +1,5 @@
 // =============================================================================
-// MyMeetily — DevicePanel (麦克风/扬声器选择)
+// MyMeetily — DevicePanel (麥克風/揚聲器選擇)
 // =============================================================================
 
 import React, { useEffect, useState } from 'react';
@@ -97,14 +97,14 @@ export const DevicePanel: React.FC = () => {
 
   return (
     <div style={STYLE.panel}>
-      <div style={STYLE.title}>音频设备</div>
+      <div style={STYLE.title}>音訊裝置</div>
 
       {loading ? (
-        <div style={STYLE.loading}>正在检测设备...</div>
+        <div style={STYLE.loading}>正在偵測裝置...</div>
       ) : (
         <>
           <div style={STYLE.field}>
-            <div style={STYLE.label}>麦克风</div>
+            <div style={STYLE.label}>麥克風</div>
             <select
               style={{ ...STYLE.select, opacity: recording ? 0.6 : 1 }}
               value={selectedMic}
@@ -112,7 +112,7 @@ export const DevicePanel: React.FC = () => {
               disabled={recording}
             >
               {micDevices.length === 0 && (
-                <option value="">未检测到设备</option>
+                <option value="">未偵測到裝置</option>
               )}
               {micDevices.map(d => (
                 <option key={d.id} value={d.id}>{d.name}</option>
@@ -121,14 +121,14 @@ export const DevicePanel: React.FC = () => {
           </div>
 
           <div style={STYLE.field}>
-            <div style={STYLE.label}>系统音频 (扬声器回采)</div>
+            <div style={STYLE.label}>系統音訊（揚聲器迴路錄音）</div>
             <select
               style={{ ...STYLE.select, opacity: recording ? 0.6 : 1 }}
               value={selectedSpeaker}
               onChange={e => dispatch({ type: 'SELECT_SPEAKER', device: e.target.value })}
               disabled={recording}
             >
-              <option value="">不录制系统声音</option>
+              <option value="">不錄製系統聲音</option>
               {speakerDevices.map(d => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
@@ -140,10 +140,10 @@ export const DevicePanel: React.FC = () => {
             onClick={loadDevices}
             disabled={recording}
           >
-            ↻ 刷新设备列表
+            ↻ 重新整理裝置清單
           </button>
 
-          <div style={STYLE.hint}>使用 WASAPI 采集音频</div>
+          <div style={STYLE.hint}>使用 WASAPI 擷取音訊</div>
         </>
       )}
     </div>

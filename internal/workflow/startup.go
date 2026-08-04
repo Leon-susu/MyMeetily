@@ -17,7 +17,7 @@ func DetectSummaryAvailability(ctx context.Context, cfg *config.Config, summaryM
 	if err := client.Ping(ctx); err != nil {
 		return StartupStatus{
 			SummaryEnabled: false,
-			SummaryMessage: "未检测到本机 Ollama 正在运行，本次将继续提供录音与转写，并直接输出报告。",
+			SummaryMessage: "未偵測到本機 Ollama 正在執行，本次將繼續提供錄音與轉錄，並直接輸出報告。",
 		}, nil
 	}
 
@@ -27,6 +27,6 @@ func DetectSummaryAvailability(ctx context.Context, cfg *config.Config, summaryM
 
 	return StartupStatus{
 		SummaryEnabled: true,
-		SummaryMessage: "Ollama 已就绪，将启用自动总结。",
+		SummaryMessage: "Ollama 已就緒，將啟用自動摘要。",
 	}, nil
 }

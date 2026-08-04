@@ -17,7 +17,7 @@ const htmlTemplate = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>会议纪要</title>
+<title>會議紀要</title>
 <style>
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -76,7 +76,7 @@ const htmlTemplate = `<!DOCTYPE html>
   }
   details.transcript summary::-webkit-details-marker { display: none; }
   details.transcript summary::after {
-    content: "展开";
+    content: "展開";
     float: right;
     color: #666;
     font-weight: 400;
@@ -189,7 +189,7 @@ func renderTranscriptDetails(transcript string, segments []TranscriptSegment) st
 	}
 
 	return "<details class=\"transcript\">\n" +
-		"<summary>原文转写</summary>\n" +
+		"<summary>原文轉寫</summary>\n" +
 		renderTranscriptBody(transcript, segments) +
 		"</details>\n"
 }

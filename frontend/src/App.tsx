@@ -1,147 +1,75 @@
-// =============================================================================
-// MyMeetily — Main Application Component
-// =============================================================================
-
-import React, { useReducer } from 'react';
-import { appReducer, initialState, AppStateContext, AppDispatchContext } from './hooks/useAppState';
+import React, { useEffect, useReducer, useState } from 'react';
+import { appReducer, initialState, AppStateContext, AppDispatchContext, useAppState } from './hooks/useAppState';
 import { useWailsEvents } from './hooks/useWailsEvents';
 import { TitleBar } from './components/TitleBar';
+import { AppNavigation } from './components/AppNavigation';
+import { HomePage } from './components/HomePage';
+import { ModelsPage } from './components/ModelsPage';
+import { SettingsPage } from './components/SettingsPage';
+import { HistoryPage } from './components/HistoryPage';
 import { DevicePanel } from './components/DevicePanel';
 import { ControlPanel } from './components/ControlPanel';
 import { StatusPanel } from './components/StatusPanel';
 import { LiveView } from './components/LiveView';
 import { ProgressView } from './components/ProgressView';
 import { ResultView } from './components/ResultView';
+import type { AppPage } from './types';
 
 const STYLE: Record<string, React.CSSProperties> = {
-  app: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100vh',
-    background: '#f8fafc',
-    color: '#334155',
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-  },
-  main: {
-    flex: 1,
-    display: 'flex',
-    overflow: 'hidden',
-  },
-  sidebar: {
-    width: 260,
-    padding: '16px',
-    flexShrink: 0,
-    overflow: 'auto',
-    borderRight: '1px solid #e2e8f0',
-    background: '#f8fafc',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-    display: 'flex',
-    overflow: 'hidden',
-  },
-  idle: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: '#ffffff',
-    borderRadius: 8,
-    border: '1px solid #e2e8f0',
-  },
-  idleIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    background: '#f1f5f9',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 28,
-    marginBottom: 16,
-  },
-  idleTitle: {
-    fontSize: 16,
-    fontWeight: 600,
-    color: '#64748b',
-    marginBottom: 4,
-  },
-  idleHint: {
-    fontSize: 13,
-    color: '#94a3b8',
-  },
-  checking: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: '#ffffff',
-    borderRadius: 8,
-    border: '1px solid #e2e8f0',
-  },
-  spinner: {
-    width: 32,
-    height: 32,
-    borderRadius: '50%',
-    border: '3px solid #e2e8f0',
-    borderTopColor: '#3b82f6',
-    marginBottom: 16,
-    animation: 'spin 0.8s linear infinite',
-  },
-  checkingText: {
-    fontSize: 14,
-    color: '#94a3b8',
-  },
+  app: { display: 'flex', flexDirection: 'column', height: '100vh', background: '#f8fafc', color: '#334155', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" },
+  body: { flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' },
+  page: { flex: 1, display: 'flex', minWidth: 0, overflow: 'hidden' },
+  meetingSidebar: { width: 300, padding: 16, flexShrink: 0, overflow: 'auto', borderRight: '1px solid #e2e8f0', background: '#f8fafc' },
+  meetingContent: { flex: 1, padding: 16, display: 'flex', overflow: 'hidden' },
+  centered: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0' },
 };
 
 function App() {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  return <AppStateContext.Provider value={state}><AppDispatchContext.Provider value={dispatch}><AppInner /></AppDispatchContext.Provider></AppStateContext.Provider>;
+}
 
+function MeetingPage() {
+  const { phase } = useAppState();
   return (
-    <AppStateContext.Provider value={state}>
-      <AppDispatchContext.Provider value={dispatch}>
-        <AppInner />
-      </AppDispatchContext.Provider>
-    </AppStateContext.Provider>
+    <div style={STYLE.page}>
+      <aside style={STYLE.meetingSidebar}><DevicePanel /><ControlPanel /><StatusPanel /></aside>
+      <main style={STYLE.meetingContent}>
+        {phase === 'checking' && <div style={STYLE.centered}><div style={{ color: '#64748b' }}>正在初始化系統…</div></div>}
+        {phase === 'ready' && <div style={STYLE.centered}><div style={{ fontSize: 34, marginBottom: 12 }}>🎙</div><div style={{ fontWeight: 700, color: '#475569' }}>準備就緒</div><div style={{ color: '#94a3b8', marginTop: 6, fontSize: 13 }}>選擇麥克風後即可開始錄音</div></div>}
+        {phase === 'recording' && <LiveView />}
+        {phase === 'processing' && <ProgressView />}
+        {phase === 'result' && <ResultView />}
+      </main>
+    </div>
   );
 }
 
 function AppInner() {
   useWailsEvents();
-  const { phase } = React.useContext(AppStateContext);
+  const { phase } = useAppState();
+  const [activePage, setActivePage] = useState<AppPage>('home');
+  const busy = phase === 'recording' || phase === 'processing';
+
+  useEffect(() => {
+    if (phase === 'recording' || phase === 'processing' || phase === 'result') setActivePage('meeting');
+  }, [phase]);
+
+  const navigate = (page: AppPage) => {
+    if (busy && (page === 'history' || page === 'models' || page === 'settings')) return;
+    setActivePage(page);
+  };
 
   return (
     <div style={STYLE.app}>
       <TitleBar />
-      <div style={STYLE.main}>
-        <div style={STYLE.sidebar}>
-          <DevicePanel />
-          <ControlPanel />
-          <StatusPanel />
-        </div>
-        <div style={STYLE.content}>
-          {phase === 'checking' && (
-            <div style={STYLE.checking}>
-              <div style={{ ...STYLE.spinner, animation: 'spin 0.8s linear infinite' }} />
-              <div style={STYLE.checkingText}>正在初始化系统...</div>
-            </div>
-          )}
-
-          {(phase === 'ready') && (
-            <div style={STYLE.idle}>
-              <div style={STYLE.idleIcon}>🎙️</div>
-              <div style={STYLE.idleTitle}>准备就绪</div>
-              <div style={STYLE.idleHint}>选择麦克风设备后点击"开始录音"</div>
-            </div>
-          )}
-
-          {phase === 'recording' && <LiveView />}
-          {phase === 'processing' && <ProgressView />}
-          {phase === 'result' && <ResultView />}
-        </div>
+      <div style={STYLE.body}>
+        <AppNavigation activePage={activePage} busy={busy} onNavigate={navigate} />
+        {activePage === 'home' && <HomePage onStartMeeting={() => navigate('meeting')} onOpenModels={() => navigate('models')} />}
+        {activePage === 'meeting' && <MeetingPage />}
+        {activePage === 'history' && <HistoryPage />}
+        {activePage === 'models' && <ModelsPage />}
+        {activePage === 'settings' && <SettingsPage />}
       </div>
     </div>
   );

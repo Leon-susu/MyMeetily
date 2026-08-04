@@ -309,9 +309,17 @@ func initializeWASAPIAudioClient(device *wca.IMMDevice, loopback bool) (*wca.IAu
 		return nil, nil, 0, err
 	}
 
+	// Many notebook microphone arrays expose a 32-bit, four-channel
+	// WAVE_FORMAT_EXTENSIBLE mix format. Merely changing its tag to PCM leaves
+	// an invalid combination and causes IAudioClient.Initialize to return
+	// E_INVALIDARG. Ask the Windows audio engine to convert both microphone and
+	// loopback streams to the format MyMeetily and whisper.cpp actually need.
 	format.WFormatTag = 1
-	format.NBlockAlign = (format.WBitsPerSample / 8) * format.NChannels
-	format.NAvgBytesPerSec = format.NSamplesPerSec * uint32(format.NBlockAlign)
+	format.NChannels = 1
+	format.NSamplesPerSec = 16000
+	format.WBitsPerSample = 16
+	format.NBlockAlign = 2
+	format.NAvgBytesPerSec = 32000
 	format.CbSize = 0
 
 	var defaultPeriod wca.REFERENCE_TIME
@@ -323,7 +331,7 @@ func initializeWASAPIAudioClient(device *wca.IMMDevice, loopback bool) (*wca.IAu
 	}
 
 	latency := time.Duration(int(defaultPeriod) * 100)
-	streamFlags := uint32(0)
+	streamFlags := uint32(wca.AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | wca.AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY)
 	bufferDuration := defaultPeriod
 	if loopback {
 		streamFlags = wca.AUDCLNT_STREAMFLAGS_LOOPBACK

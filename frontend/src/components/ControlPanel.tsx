@@ -88,7 +88,7 @@ function formatTime(seconds: number): string {
 }
 
 export const ControlPanel: React.FC = () => {
-  const { phase, isRecording, elapsed, selectedMic } = useAppState();
+  const { phase, isRecording, elapsed, selectedMic, selectedSpeaker } = useAppState();
   const dispatch = useAppDispatch();
   const [error, setError] = useState('');
   const [stopping, setStopping] = useState(false);
@@ -98,10 +98,9 @@ export const ControlPanel: React.FC = () => {
     if (!window.go || !selectedMic) return;
     setError('');
     try {
-      const speaker = ''; // Use selected speaker from state
-      await RecordService().StartRecording(selectedMic, speaker);
+      await RecordService().StartRecording(selectedMic, selectedSpeaker);
     } catch (e: any) {
-      setError(e?.message || '錄音啟動失敗');
+      setError(typeof e === 'string' ? e : e?.message || '錄音啟動失敗');
     }
   };
 
@@ -123,7 +122,7 @@ export const ControlPanel: React.FC = () => {
         }
       }
     } catch (e: any) {
-      setError(e?.message || '停止錄音失敗');
+      setError(typeof e === 'string' ? e : e?.message || '停止錄音失敗');
     } finally {
       setStopping(false);
     }

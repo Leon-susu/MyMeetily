@@ -1,6 +1,13 @@
 name: Build Windows Vulkan Engine
 
 on:
+  push:
+    branches:
+      - feature/app-shell-settings-models
+    paths:
+      - .github/workflows/build-whisper-vulkan.yml
+      - scripts/Build-WhisperVulkan.ps1
+      - scripts/Test-WhisperVulkanPackage.ps1
   workflow_dispatch:
     inputs:
       publish_release:
@@ -46,7 +53,7 @@ jobs:
           retention-days: 14
 
       - name: Publish release after explicit approval
-        if: ${{ inputs.publish_release }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release }}
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"archive/zip"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -20,6 +21,10 @@ import (
 const (
 	defaultWhisperVersion = "v1.8.5"
 	whisperRepo           = "ggml-org/whisper.cpp"
+	vulkanReleaseRepo     = "Leon-susu/MyMeetily"
+	vulkanReleaseVersion  = "whisper-vulkan-v1.8.5-1"
+	vulkanAssetName       = "whisper-vulkan-1.8.5-bin-x64.zip"
+	vulkanAssetSHA256     = "19340f2d8a7fb4b81b5712f7017691e97f3f5928d7b3d17eb79eb0abfb0dff12"
 	engineMetadataName    = ".engine-metadata.json"
 )
 
@@ -101,9 +106,9 @@ func installWhisperEngine(appRoot string, opts initEngineOptions) error {
 		opts.whisperVariant = recommendedWhisperVariant(profile)
 		fmt.Printf("自動偵測顯示硬體：%s\n", describeGPUs(profile.GPUs))
 		fmt.Printf("自動選擇 whisper.cpp 引擎：%s\n", opts.whisperVariant)
-		if profile.HasAMD {
-			fmt.Println("注意：偵測到 AMD Radeon；官方 Windows Release 尚未提供 Vulkan 壓縮包，目前先使用 CPU 引擎。")
-			fmt.Println("若已有可信任的 Vulkan 建置，可使用 --whisper-variant vulkan --whisper-zip <檔案> 安裝。")
+		if profile.HasAMD && !profile.VulkanRuntime {
+			fmt.Println("注意：偵測到 AMD Radeon，但未偵測到 Vulkan runtime；目前先使用 CPU 引擎。")
+			fmt.Println("請先更新筆電原廠或 AMD 顯示驅動，再重新執行 init-engine --force。")
 		}
 	}
 	version := normalizeReleaseVersion(opts.whisperVersion)
@@ -112,20 +117,28 @@ func installWhisperEngine(appRoot string, opts initEngineOptions) error {
 		return err
 	}
 	url := releaseDownloadURL(whisperRepo, version, asset)
+	expectedSHA256 := ""
+	if strings.EqualFold(strings.TrimSpace(opts.whisperVariant), "vulkan") {
+		if version != defaultWhisperVersion {
+			return fmt.Errorf("Vulkan 預建引擎目前僅支援 %s", defaultWhisperVersion)
+		}
+		url = releaseDownloadURL(vulkanReleaseRepo, vulkanReleaseVersion, vulkanAssetName)
+		expectedSHA256 = vulkanAssetSHA256
+	}
 	destDir := layout.WhisperEngineDir(appRoot)
 	metadataPath := filepath.Join(destDir, engineMetadataName)
 	autoZipPath := filepath.Join(destDir, asset)
-	if strings.EqualFold(strings.TrimSpace(opts.whisperVariant), "vulkan") && strings.TrimSpace(opts.whisperZip) == "" && !fileExists(autoZipPath) {
-		return fmt.Errorf("官方 whisper.cpp Windows Release 尚未提供 Vulkan 壓縮包；請以 --whisper-zip 指定可信任的 Vulkan 建置檔，或改用 --whisper-variant cpu")
-	}
-	source, err := resolveEngineArchiveSource(url, opts.whisperZip, autoZipPath)
+	source, err := resolveEngineArchiveSource(url, opts.whisperZip, autoZipPath, expectedSHA256)
 	if err != nil {
 		return err
 	}
-	requiredFiles := []string{
-		filepath.Join(destDir, "whisper-cli.exe"),
-		filepath.Join(destDir, "whisper.dll"),
-		filepath.Join(destDir, "ggml.dll"),
+	requiredNames := []string{"whisper-cli.exe", "whisper.dll", "ggml.dll"}
+	if strings.EqualFold(strings.TrimSpace(opts.whisperVariant), "vulkan") {
+		requiredNames = append(requiredNames, "ggml-vulkan.dll")
+	}
+	requiredFiles := make([]string, 0, len(requiredNames))
+	for _, name := range requiredNames {
+		requiredFiles = append(requiredFiles, filepath.Join(destDir, name))
 	}
 
 	fmt.Println("=== 初始化 whisper.cpp 引擎 ===")
@@ -156,17 +169,20 @@ func installWhisperEngine(appRoot string, opts initEngineOptions) error {
 		if err := source.populate(tmpZip); err != nil {
 			return err
 		}
+		if err := verifyFileSHA256(tmpZip, source.expectedSHA256); err != nil {
+			return err
+		}
 		if err := extractAllFilesFromZip(tmpZip, stageDir); err != nil {
 			return err
 		}
 		if err := normalizeWhisperStageLayout(stageDir); err != nil {
 			return err
 		}
-		if err := ensureRequiredFiles("whisper.cpp",
-			filepath.Join(stageDir, "whisper-cli.exe"),
-			filepath.Join(stageDir, "whisper.dll"),
-			filepath.Join(stageDir, "ggml.dll"),
-		); err != nil {
+		stageRequired := make([]string, 0, len(requiredNames))
+		for _, name := range requiredNames {
+			stageRequired = append(stageRequired, filepath.Join(stageDir, name))
+		}
+		if err := ensureRequiredFiles("whisper.cpp", stageRequired...); err != nil {
 			return err
 		}
 		return writeEngineMetadata(filepath.Join(stageDir, engineMetadataName), engineMetadata{
@@ -189,6 +205,7 @@ type engineInstallStatus int
 type engineArchiveSource struct {
 	display        string
 	metadataSource string
+	expectedSHA256 string
 	populate       func(dst string) error
 }
 
@@ -276,7 +293,7 @@ func installFromZip(destDir string, install func(tmpZip, stageDir string) error)
 	return os.Rename(stageDir, destDir)
 }
 
-func resolveEngineArchiveSource(downloadURL, localZipPath, autoZipPath string) (engineArchiveSource, error) {
+func resolveEngineArchiveSource(downloadURL, localZipPath, autoZipPath, expectedSHA256 string) (engineArchiveSource, error) {
 	localZipPath = strings.TrimSpace(localZipPath)
 	if localZipPath != "" {
 		return newLocalEngineArchiveSource(localZipPath)
@@ -289,10 +306,32 @@ func resolveEngineArchiveSource(downloadURL, localZipPath, autoZipPath string) (
 	return engineArchiveSource{
 		display:        downloadURL,
 		metadataSource: downloadURL,
+		expectedSHA256: strings.ToLower(strings.TrimSpace(expectedSHA256)),
 		populate: func(dst string) error {
 			return downloadFile(dst, downloadURL)
 		},
 	}, nil
+}
+
+func verifyFileSHA256(path, expected string) error {
+	expected = strings.ToLower(strings.TrimSpace(expected))
+	if expected == "" {
+		return nil
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return err
+	}
+	actual := fmt.Sprintf("%x", hash.Sum(nil))
+	if actual != expected {
+		return fmt.Errorf("引擎壓縮包 SHA-256 不符：預期 %s，實際 %s", expected, actual)
+	}
+	return nil
 }
 
 func newLocalEngineArchiveSource(localZipPath string) (engineArchiveSource, error) {
@@ -480,7 +519,7 @@ func whisperAssetName(variant string) (string, error) {
 	case "blas":
 		return "whisper-blas-bin-x64.zip", nil
 	case "vulkan":
-		return "whisper-vulkan-bin-x64.zip", nil
+		return vulkanAssetName, nil
 	case "cuda-11.8", "cuda11.8", "cublas-11.8":
 		return "whisper-cublas-11.8.0-bin-x64.zip", nil
 	case "cuda-12.4", "cuda12.4", "cublas-12.4":
@@ -493,6 +532,9 @@ func whisperAssetName(variant string) (string, error) {
 func recommendedWhisperVariant(profile hardware.Profile) string {
 	if profile.HasNVIDIA {
 		return "cuda-12.4"
+	}
+	if profile.HasAMD && profile.VulkanRuntime {
+		return "vulkan"
 	}
 	return "cpu"
 }

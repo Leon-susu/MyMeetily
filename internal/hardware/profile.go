@@ -60,7 +60,7 @@ func Detect() Profile {
 	case profile.HasAMD:
 		profile.RecommendedEngine = "vulkan"
 		profile.RecommendedModel = "small"
-		profile.Recommendation = "偵測到 AMD Radeon，建議使用 Vulkan 引擎與 Small 模型；完成 Vulkan 引擎發行前，安裝器會安全改用 CPU 引擎。"
+		profile.Recommendation = "偵測到 AMD Radeon，建議使用 Vulkan 引擎與 Small 模型；若 Vulkan runtime 不可用，安裝器會安全改用 CPU 引擎。"
 		if profile.VulkanRuntime {
 			profile.DriverAdvice = "已偵測到 Vulkan runtime。AMD 筆電請優先使用電腦品牌官網提供的顯示卡驅動；若原廠未提供新版，再使用 AMD Software: Adrenalin Edition。"
 		} else {

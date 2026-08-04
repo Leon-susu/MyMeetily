@@ -7,7 +7,7 @@ import (
 
 func (n *Nodes) PreprocessAudio(ctx context.Context, state *MeetingState) (*MeetingState, error) {
 	if state.ProgressFn != nil {
-		state.ProgressFn("音频预处理")
+		state.ProgressFn("音訊預處理")
 	}
 	slog.Info("preprocessing audio", "file", state.AudioFilePath)
 

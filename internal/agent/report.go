@@ -13,7 +13,7 @@ import (
 
 func (n *Nodes) FormatOutput(ctx context.Context, state *MeetingState) (*MeetingState, error) {
 	if state.ProgressFn != nil {
-		state.ProgressFn("生成输出")
+		state.ProgressFn("產生輸出")
 	}
 	baseName := strings.TrimSuffix(filepath.Base(state.AudioFilePath), filepath.Ext(state.AudioFilePath))
 	timestamp := time.Now().Format("20060102_150405")
@@ -22,17 +22,17 @@ func (n *Nodes) FormatOutput(ctx context.Context, state *MeetingState) (*Meeting
 	fullContent := BuildMeetingReportMarkdown(state, time.Now())
 	transcriptSegments := toOutputSegments(state.Segments)
 
-	htmlPath := filepath.Join(outDir, fmt.Sprintf("%s_纪要_%s.html", baseName, timestamp))
+	htmlPath := filepath.Join(outDir, fmt.Sprintf("%s_紀要_%s.html", baseName, timestamp))
 	if err := output.WriteHTML(fullContent, state.RawTranscript, transcriptSegments, htmlPath); err != nil {
 		slog.Error("write html", "error", err)
 	}
 
-	state.MarkdownPath = filepath.Join(outDir, fmt.Sprintf("%s_纪要_%s.md", baseName, timestamp))
+	state.MarkdownPath = filepath.Join(outDir, fmt.Sprintf("%s_紀要_%s.md", baseName, timestamp))
 	if err := output.WriteMarkdown(fullContent, state.MarkdownPath); err != nil {
 		slog.Error("write markdown", "error", err)
 	}
 
-	state.TranscriptPath = filepath.Join(outDir, fmt.Sprintf("%s_转写_%s.txt", baseName, timestamp))
+	state.TranscriptPath = filepath.Join(outDir, fmt.Sprintf("%s_轉寫_%s.txt", baseName, timestamp))
 	if err := output.WriteText(state.RawTranscript, state.TranscriptPath); err != nil {
 		slog.Error("write transcript", "error", err)
 	}
@@ -50,13 +50,13 @@ func BuildMeetingReportMarkdown(state *MeetingState, generatedAt time.Time) stri
 		return ""
 	}
 
-	return fmt.Sprintf(`# 会议纪要
+	return fmt.Sprintf(`# 會議紀要
 
-> 源文件：%s
-> 音频时长：%.0f 秒
-> 识别语言：%s
-> 总结状态：%s
-> 生成时间：%s
+> 源檔案：%s
+> 音訊時長：%.0f 秒
+> 辨識語言：%s
+> 摘要狀態：%s
+> 產生時間：%s
 
 ---
 
@@ -73,12 +73,12 @@ func BuildMeetingReportMarkdown(state *MeetingState, generatedAt time.Time) stri
 
 func summaryStatusText(state *MeetingState) string {
 	if state == nil {
-		return "未启用自动总结，仅输出原文转写"
+		return "未啟用自動摘要，僅輸出原文轉錄"
 	}
 	if state.SummaryEnabled && state.SummaryError == "" {
-		return "已启用自动总结"
+		return "已啟用自動摘要"
 	}
-	return "未启用自动总结，仅输出原文转写"
+	return "未啟用自動摘要，僅輸出原文轉錄"
 }
 
 func toOutputSegments(segments []Segment) []output.TranscriptSegment {

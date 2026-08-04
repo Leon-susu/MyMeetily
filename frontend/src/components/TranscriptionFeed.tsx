@@ -1,5 +1,5 @@
 // =============================================================================
-// MyMeetily — TranscriptionFeed (实时转写滚动)
+// MyMeetily — TranscriptionFeed (即時轉寫滚动)
 // =============================================================================
 
 import React, { useEffect, useRef } from 'react';
@@ -54,7 +54,7 @@ export const TranscriptionFeed: React.FC = () => {
         <div style={STYLE.empty}>
           <div style={STYLE.emptyText}>
             <span style={STYLE.pulse} />
-            等待语音输入...
+            等待語音輸入...
           </div>
         </div>
       </div>

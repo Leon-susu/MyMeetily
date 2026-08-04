@@ -32,6 +32,66 @@ export interface AppInfo {
   llmModel: string;
 }
 
+export type AppPage = 'home' | 'meeting' | 'history' | 'models' | 'settings';
+
+export interface Preferences {
+  whisperModel: string;
+  ollamaModel: string;
+  language: string;
+  outputDir: string;
+  temperature: number;
+  maxTokens: number;
+}
+
+export interface ModelOption {
+  name: string;
+  path: string;
+  size: number;
+  active: boolean;
+}
+
+export interface ModelCatalogItem {
+  id: string;
+  kind: 'whisper' | 'ollama';
+  name: string;
+  path: string;
+  size: number;
+  description: string;
+  installed: boolean;
+  active: boolean;
+  recommended: boolean;
+}
+
+export interface HardwareProfile {
+  cpuThreads: number;
+  architecture: string;
+  gpus: string[];
+  hasNvidia: boolean;
+  recommendedModel: string;
+  recommendation: string;
+}
+
+export interface ModelOperationProgress {
+  kind: 'whisper' | 'ollama';
+  modelId: string;
+  phase: 'starting' | 'downloading' | 'done' | 'cancelled' | 'error';
+  message: string;
+  downloaded: number;
+  total: number;
+  percent: number;
+}
+
+export interface MeetingHistoryItem {
+  id: string;
+  title: string;
+  sourceAudio: string;
+  generatedAt: string;
+  summary: string;
+  htmlPath: string;
+  markdownPath: string;
+  transcriptPath: string;
+}
+
 // ---- Transcript Segment ----
 export interface Segment {
   start: number;

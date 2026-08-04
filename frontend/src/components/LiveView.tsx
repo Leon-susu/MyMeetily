@@ -1,5 +1,5 @@
 // =============================================================================
-// MyMeetily — LiveView (录音实时界面)
+// MyMeetily — LiveView (錄音即時界面)
 // =============================================================================
 
 import React from 'react';
@@ -47,8 +47,8 @@ export const LiveView: React.FC = () => {
   return (
     <div style={STYLE.container}>
       <div style={STYLE.header}>
-        <div style={STYLE.title}>实时录音</div>
-        <div style={STYLE.subtitle}>AI 实时转写中...</div>
+        <div style={STYLE.title}>即時錄音</div>
+        <div style={STYLE.subtitle}>AI 即時轉寫中...</div>
       </div>
       <div style={STYLE.body}>
         <AudioMeter />

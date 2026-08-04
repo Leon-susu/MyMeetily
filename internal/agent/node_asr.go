@@ -8,11 +8,15 @@ import (
 
 func (n *Nodes) CallASR(ctx context.Context, state *MeetingState) (*MeetingState, error) {
 	if state.ProgressFn != nil {
-		state.ProgressFn("语音识别")
+		state.ProgressFn("語音辨識")
 	}
 	slog.Info("calling ASR", "wav", state.WavFilePath)
 
-	result, err := n.asrClient.Transcribe(ctx, state.WavFilePath, state.Language)
+	result, err := n.asrClient.TranscribeWithProgress(ctx, state.WavFilePath, state.Language, func(current, total int) {
+		if state.ProgressFn != nil {
+			state.ProgressFn(fmt.Sprintf("語音辨識 %d/%d", current, total))
+		}
+	})
 	if err != nil {
 		state.Error = fmt.Sprintf("ASR failed: %v", err)
 		return state, fmt.Errorf("asr: %w", err)

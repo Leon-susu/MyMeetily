@@ -23,13 +23,13 @@ func main() {
 		switch args[0] {
 		case "init-engine":
 			if err := app.Run(args); err != nil {
-				fmt.Fprintf(os.Stderr, "init-engine 失败: %v\n", err)
+				fmt.Fprintf(os.Stderr, "init-engine 失敗: %v\n", err)
 				os.Exit(1)
 			}
 			return
 		case "init-model":
 			if err := app.Run(args); err != nil {
-				fmt.Fprintf(os.Stderr, "init-model 失败: %v\n", err)
+				fmt.Fprintf(os.Stderr, "init-model 失敗: %v\n", err)
 				os.Exit(1)
 			}
 			return
@@ -40,9 +40,9 @@ func main() {
 	myApp := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:  "MyMeetily - 本地离线 AI 会议助手",
-		Width:  1280,
-		Height: 860,
+		Title:     "MyMeetily - 本機離線 AI 會議助手",
+		Width:     1280,
+		Height:    860,
 		MinWidth:  960,
 		MinHeight: 640,
 		AssetServer: &assetserver.Options{

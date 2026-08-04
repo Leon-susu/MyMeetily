@@ -29,11 +29,11 @@ func (n *Nodes) Summarize(ctx context.Context, state *MeetingState) (*MeetingSta
 }
 
 func fallbackMeetingNotes(summaryErr string) string {
-	return fmt.Sprintf(`## 摘要生成失败
+	return fmt.Sprintf(`## 摘要產生失敗
 
-本次未能完成自动总结，已保留完整转写内容。
-- 可能原因：Ollama 服务未启动、模型不可用，或本次请求超时
+本次未能完成自动總結，已保留完整轉寫内容。
+- 可能原因：Ollama 服務未啟動、模型無法使用，或本次請求逾時
 - 错误信息：%s
-- 建议：检查 Ollama 状态后重试；当前 HTML 报告下方仍可展开查看完整原文
+- 建議：檢查 Ollama 狀態後重試；目前 HTML 報告下方仍可展開查看完整原文
 `, summaryErr)
 }

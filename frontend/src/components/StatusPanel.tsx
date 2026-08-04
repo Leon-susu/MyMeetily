@@ -53,9 +53,9 @@ export const StatusPanel: React.FC = () => {
   if (!deps) {
     return (
       <div style={STYLE.panel}>
-        <div style={STYLE.title}>系统状态</div>
+        <div style={STYLE.title}>系統狀態</div>
         <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: 12 }}>
-          正在检查...
+          正在檢查...
         </div>
       </div>
     );
@@ -63,18 +63,18 @@ export const StatusPanel: React.FC = () => {
 
   return (
     <div style={STYLE.panel}>
-      <div style={STYLE.title}>系统状态</div>
+      <div style={STYLE.title}>系統狀態</div>
       <div style={STYLE.item}>
         <span style={dotStyle(true)} />
         <span>whisper.cpp 引擎</span>
       </div>
       <div style={STYLE.item}>
         <span style={dotStyle(deps.whisperModel.ok)} />
-        <span>语音模型: {deps.whisperModel.ok ? '已就绪' : '未找到'}</span>
+        <span>語音模型: {deps.whisperModel.ok ? '已就緒' : '找不到'}</span>
       </div>
       <div style={STYLE.item}>
         <span style={dotStyle(deps.ollama.ok)} />
-        <span>Ollama: {deps.ollama.ok ? '已连接' : '未连接'}</span>
+        <span>Ollama: {deps.ollama.ok ? '已連線' : '未連線'}</span>
       </div>
       {appInfo && (
         <div style={STYLE.info}>

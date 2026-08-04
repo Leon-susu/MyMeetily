@@ -1,6 +1,7 @@
 package audio
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -8,11 +9,12 @@ import (
 	"log/slog"
 	"math"
 	"os"
-	"bytes"
 	"os/exec"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mymeetily/mymeetily/internal/processutil"
 )
 
 // LiveTranscriber performs real-time VAD-based sentence segmentation and
@@ -24,9 +26,9 @@ type LiveTranscriber struct {
 	closeCh chan struct{} // signals that recording has stopped (flush pending)
 
 	// Results: transcribed sentences are sent here for the TUI to consume.
-	Results <-chan string
+	Results    <-chan string
 	lastResult string // dedup: skip consecutive identical transcripts
-	results chan string
+	results    chan string
 
 	// Diagnostics (updated atomically from VAD goroutine, read by UI).
 	Diag LiveTranscribeDiag
@@ -54,11 +56,11 @@ func (d *LiveTranscribeDiag) Snapshot() LiveTranscribeDiag {
 	return *d
 }
 
-func (d *LiveTranscribeDiag) incAudio()   { d.AudioPackets++ }
-func (d *LiveTranscribeDiag) incVoice()   { d.VoiceFrames++ }
-func (d *LiveTranscribeDiag) incSilent()  { d.SilentFrames++ }
-func (d *LiveTranscribeDiag) incSentence(){ d.SentencesCut++ }
-func (d *LiveTranscribeDiag) setRMS(v float32) { d.LastRMS = v }
+func (d *LiveTranscribeDiag) incAudio()          { d.AudioPackets++ }
+func (d *LiveTranscribeDiag) incVoice()          { d.VoiceFrames++ }
+func (d *LiveTranscribeDiag) incSilent()         { d.SilentFrames++ }
+func (d *LiveTranscribeDiag) incSentence()       { d.SentencesCut++ }
+func (d *LiveTranscribeDiag) setRMS(v float32)   { d.LastRMS = v }
 func (d *LiveTranscribeDiag) addWhisper(n int64) { d.WhisperRunning += n }
 
 // LiveTranscribeConfig carries the settings for real-time transcription.
@@ -116,15 +118,17 @@ func (lt *LiveTranscriber) writeDebugLog(msg string) {
 	debugLogMu.Lock()
 	defer debugLogMu.Unlock()
 	f, err := os.OpenFile("transcriber_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil { return }
+	if err != nil {
+		return
+	}
 	defer f.Close()
 	fmt.Fprintln(f, msg)
 }
 func (lt *LiveTranscriber) Close() {
-	close(lt.closeCh)  // signal VAD to flush
-	lt.cancel()        // signal workers to stop
-	lt.wg.Wait()       // wait for goroutines
-	close(lt.results)  // signal TUI that no more results will come
+	close(lt.closeCh) // signal VAD to flush
+	lt.cancel()       // signal workers to stop
+	lt.wg.Wait()      // wait for goroutines
+	close(lt.results) // signal TUI that no more results will come
 }
 
 // --- VAD constants ---
@@ -136,7 +140,7 @@ const (
 
 var (
 	vadSilenceMs  = 1000.0 // silence duration to mark sentence boundary
-	vadMinUtterMs = 800.0 // minimum utterance duration to process
+	vadMinUtterMs = 800.0  // minimum utterance duration to process
 )
 
 // vadLoop reads raw PCM from audioCh, runs energy-based VAD, cuts sentences,
@@ -165,9 +169,9 @@ func (lt *LiveTranscriber) vadLoop(ctx context.Context) {
 	_ = samplesPerFrame * bytesPerSample * lt.cfg.Channels
 
 	var (
-		ringBuf     []byte            // accumulated audio for current utterance
-		silentFrames int              // consecutive silent frames
-		voiceActive bool
+		ringBuf      []byte // accumulated audio for current utterance
+		silentFrames int    // consecutive silent frames
+		voiceActive  bool
 	)
 
 	// VAD thresholds converted to sample/frame counts.
@@ -191,8 +195,8 @@ func (lt *LiveTranscriber) vadLoop(ctx context.Context) {
 		case lt.results <- "__pending__":
 		default:
 		}
-			lt.Diag.incSentence()
-			lt.Diag.addWhisper(1)
+		lt.Diag.incSentence()
+		lt.Diag.addWhisper(1)
 		go lt.transcribeOne(ctx, sentenceWAV)
 	}
 
@@ -213,7 +217,7 @@ func (lt *LiveTranscriber) vadLoop(ctx context.Context) {
 			return
 
 		case pcm := <-lt.audioCh:
-				lt.Diag.incAudio()
+			lt.Diag.incAudio()
 			if len(pcm) == 0 {
 				continue
 			}
@@ -223,14 +227,14 @@ func (lt *LiveTranscriber) vadLoop(ctx context.Context) {
 			isVoice := rms >= vadThreshold
 
 			if isVoice {
-			lt.Diag.incVoice()
+				lt.Diag.incVoice()
 				silentFrames = 0
 				if !voiceActive {
 					voiceActive = true
 					ringBuf = nil // start fresh utterance
 				}
 				ringBuf = append(ringBuf, pcm...)
-			lt.Diag.incSilent()
+				lt.Diag.incSilent()
 			} else if voiceActive {
 				silentFrames++
 				ringBuf = append(ringBuf, pcm...)
@@ -259,12 +263,15 @@ func (lt *LiveTranscriber) transcribeOne(ctx context.Context, wavPath string) {
 
 	info, _ := os.Stat(wavPath)
 	wavSize := int64(0)
-	if info != nil { wavSize = info.Size() }
+	if info != nil {
+		wavSize = info.Size()
+	}
 
 	cmdCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(cmdCtx, lt.cfg.WhisperBinary, args...)
+	processutil.HideWindow(cmd)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -288,7 +295,10 @@ func (lt *LiveTranscriber) transcribeOne(ctx context.Context, wavPath string) {
 		return
 	}
 	lt.Diag.WhisperOK++
-	if text == lt.lastResult { lt.Diag.WhisperEmpty++; return }
+	if text == lt.lastResult {
+		lt.Diag.WhisperEmpty++
+		return
+	}
 	lt.Diag.LastResult = text
 	lt.lastResult = text
 	lt.writeDebugLog(fmt.Sprintf("WHISPER OK text=%s", text))

@@ -92,3 +92,37 @@ func TestLoadFromFile(t *testing.T) {
 		t.Errorf("unexpected backend: %s", cfg.Audio.Backend)
 	}
 }
+
+func TestSaveAndLoadUserOverrides(t *testing.T) {
+	t.Setenv("AppData", t.TempDir())
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("load default config: %v", err)
+	}
+	cfg.ASR.Language = "en"
+	cfg.Ollama.Model = "qwen2.5:3b"
+	cfg.Output.OutputDir = "./custom-output"
+
+	if err := SaveUser(cfg); err != nil {
+		t.Fatalf("save user config: %v", err)
+	}
+	// Repeated saves must also work on Windows when config.yaml already exists.
+	cfg.ASR.Language = "zh"
+	if err := SaveUser(cfg); err != nil {
+		t.Fatalf("save user config again: %v", err)
+	}
+	loaded, err := LoadWithUserOverrides()
+	if err != nil {
+		t.Fatalf("load user overrides: %v", err)
+	}
+	if loaded.ASR.Language != "zh" {
+		t.Fatalf("unexpected language: %s", loaded.ASR.Language)
+	}
+	if loaded.Ollama.Model != "qwen2.5:3b" {
+		t.Fatalf("unexpected model: %s", loaded.Ollama.Model)
+	}
+	if loaded.Output.OutputDir != "./custom-output" {
+		t.Fatalf("unexpected output dir: %s", loaded.Output.OutputDir)
+	}
+}

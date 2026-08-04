@@ -20,10 +20,10 @@ type wasapiDevice struct {
 func listWASAPICaptureDevices() ([]string, error) {
 	devices, err := listWASAPIDevices(wca.ECapture)
 	if err != nil {
-		return nil, fmt.Errorf("枚举 WASAPI 麦克风设备: %w", err)
+		return nil, fmt.Errorf("列舉 WASAPI 麥克風裝置: %w", err)
 	}
 	if len(devices) == 0 {
-		return nil, fmt.Errorf("未检测到 WASAPI 麦克风设备")
+		return nil, fmt.Errorf("未偵測到 WASAPI 麥克風裝置")
 	}
 	return devices, nil
 }
@@ -31,10 +31,10 @@ func listWASAPICaptureDevices() ([]string, error) {
 func listWASAPILoopbackDevices() ([]string, error) {
 	devices, err := listWASAPIDevices(wca.ERender)
 	if err != nil {
-		return nil, fmt.Errorf("枚举 WASAPI 系统音频设备: %w", err)
+		return nil, fmt.Errorf("列舉 WASAPI 系統音訊裝置: %w", err)
 	}
 	if len(devices) == 0 {
-		return nil, fmt.Errorf("未检测到 WASAPI 系统音频设备")
+		return nil, fmt.Errorf("未偵測到 WASAPI 系統音訊裝置")
 	}
 	return devices, nil
 }
@@ -88,7 +88,7 @@ func newWASAPIDeviceEnumerator() (*wca.IMMDeviceEnumerator, error) {
 	return enumerator, nil
 }
 
-	func enumerateWASAPIDeviceDescriptorsWithEnumerator(enumerator *wca.IMMDeviceEnumerator, flow uint32) ([]wasapiDevice, error) {
+func enumerateWASAPIDeviceDescriptorsWithEnumerator(enumerator *wca.IMMDeviceEnumerator, flow uint32) ([]wasapiDevice, error) {
 	var collection *wca.IMMDeviceCollection
 	if err := enumerator.EnumAudioEndpoints(flow, wca.DEVICE_STATE_ACTIVE, &collection); err != nil {
 		return nil, err
@@ -107,7 +107,7 @@ func newWASAPIDeviceEnumerator() (*wca.IMMDeviceEnumerator, error) {
 	for index := uint32(0); index < count; index++ {
 		var device *wca.IMMDevice
 		if err := collection.Item(index, &device); err != nil {
-			return nil, fmt.Errorf("读取音频设备 %d: %w", index, err)
+			return nil, fmt.Errorf("讀取音訊裝置 %d: %w", index, err)
 		}
 
 		descriptor, err := readWASAPIDeviceDescriptor(device, flow)
@@ -130,7 +130,7 @@ func findWASAPIDeviceBySelection(enumerator *wca.IMMDeviceEnumerator, flow uint3
 		return nil, zero, err
 	}
 	if collection == nil {
-		return nil, zero, fmt.Errorf("未检测到 WASAPI 设备")
+		return nil, zero, fmt.Errorf("未偵測到 WASAPI 裝置")
 	}
 	defer collection.Release()
 
@@ -142,7 +142,7 @@ func findWASAPIDeviceBySelection(enumerator *wca.IMMDeviceEnumerator, flow uint3
 	for index := uint32(0); index < count; index++ {
 		var device *wca.IMMDevice
 		if err := collection.Item(index, &device); err != nil {
-			return nil, zero, fmt.Errorf("读取音频设备 %d: %w", index, err)
+			return nil, zero, fmt.Errorf("讀取音訊裝置 %d: %w", index, err)
 		}
 
 		descriptor, err := readWASAPIDeviceDescriptor(device, flow)
@@ -158,24 +158,24 @@ func findWASAPIDeviceBySelection(enumerator *wca.IMMDeviceEnumerator, flow uint3
 		device.Release()
 	}
 
-	return nil, zero, fmt.Errorf("未找到所选 WASAPI 设备: %s", selected)
+	return nil, zero, fmt.Errorf("找不到所選的 WASAPI 裝置: %s", selected)
 }
 
 func readWASAPIDeviceDescriptor(device *wca.IMMDevice, flow uint32) (wasapiDevice, error) {
 	var deviceID string
 	if err := device.GetId(&deviceID); err != nil {
-		return wasapiDevice{}, fmt.Errorf("读取 WASAPI 设备 ID: %w", err)
+		return wasapiDevice{}, fmt.Errorf("讀取 WASAPI 裝置 ID: %w", err)
 	}
 
 	var props *wca.IPropertyStore
 	if err := device.OpenPropertyStore(wca.STGM_READ, &props); err != nil {
-		return wasapiDevice{}, fmt.Errorf("打开 WASAPI 设备属性 %s: %w", deviceID, err)
+		return wasapiDevice{}, fmt.Errorf("開啟 WASAPI 裝置屬性 %s: %w", deviceID, err)
 	}
 	defer props.Release()
 
 	var value wca.PROPVARIANT
 	if err := props.GetValue(&wca.PKEY_Device_FriendlyName, &value); err != nil {
-		return wasapiDevice{}, fmt.Errorf("读取 WASAPI 设备名称 %s: %w", deviceID, err)
+		return wasapiDevice{}, fmt.Errorf("讀取 WASAPI 裝置名稱 %s: %w", deviceID, err)
 	}
 
 	name := strings.TrimSpace(value.String())

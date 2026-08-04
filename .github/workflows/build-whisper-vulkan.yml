@@ -1,0 +1,70 @@
+name: Build Windows Vulkan Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish the verified package as a GitHub release
+        required: true
+        type: boolean
+        default: false
+      release_tag:
+        description: Release tag used only when publishing
+        required: true
+        type: string
+        default: whisper-vulkan-v1.8.5-1
+
+permissions:
+  contents: write
+
+jobs:
+  build-vulkan-engine:
+    runs-on: windows-2022
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out MyMeetily
+        uses: actions/checkout@v4
+
+      - name: Build pinned whisper.cpp Vulkan package
+        shell: pwsh
+        run: >-
+          ./scripts/Build-WhisperVulkan.ps1
+          -WhisperVersion v1.8.5
+          -VulkanSdkVersion 1.4.350.0
+          -VulkanSdkSha256 855b27ba05d2d8119c5114c5d4ff870ca38f2c632b11e1bb9923b9b7e6ecfe7b
+          -OutputDirectory ./dist/vulkan-engine
+
+      - name: Upload review artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: whisper-vulkan-v1.8.5-windows-x64
+          path: |
+            dist/vulkan-engine/*.zip
+            dist/vulkan-engine/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish release after explicit approval
+        if: ${{ inputs.publish_release }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          $notes = @"
+          MyMeetily Windows Vulkan engine for AMD, Intel, and other Vulkan-capable GPUs.
+
+          Source: ggml-org/whisper.cpp v1.8.5
+          Backend: GGML_VULKAN=ON
+          Vulkan SDK: LunarG 1.4.350.0
+
+          Verify the accompanying SHA-256 file before installation.
+          "@
+          $assets = @(Get-ChildItem -LiteralPath dist/vulkan-engine -File | Where-Object Extension -In '.zip', '.sha256' | Select-Object -ExpandProperty FullName)
+          if ($assets.Count -ne 2) { throw "Expected one zip and one checksum file." }
+          gh release create $env:RELEASE_TAG `
+            --title "MyMeetily Vulkan Engine $env:RELEASE_TAG" `
+            --notes $notes `
+            --target $env:GITHUB_SHA `
+            @assets

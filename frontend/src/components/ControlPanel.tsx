@@ -55,6 +55,18 @@ const STYLE: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     marginBottom: 8,
   },
+  pauseBtn: {
+    width: '100%',
+    padding: '12px 0',
+    borderRadius: 8,
+    border: '1px solid #fde68a',
+    background: '#fffbeb',
+    color: '#b45309',
+    fontSize: 15,
+    fontWeight: 600,
+    cursor: 'pointer',
+    marginBottom: 8,
+  },
   importBtn: {
     width: '100%',
     padding: '8px 0',
@@ -88,7 +100,7 @@ function formatTime(seconds: number): string {
 }
 
 export const ControlPanel: React.FC = () => {
-  const { phase, isRecording, elapsed, selectedMic, selectedSpeaker } = useAppState();
+  const { phase, isRecording, isPaused, elapsed, selectedMic, selectedSpeaker } = useAppState();
   const dispatch = useAppDispatch();
   const [error, setError] = useState('');
   const [stopping, setStopping] = useState(false);
@@ -125,6 +137,20 @@ export const ControlPanel: React.FC = () => {
       setError(typeof e === 'string' ? e : e?.message || '停止錄音失敗');
     } finally {
       setStopping(false);
+    }
+  };
+
+  const handlePauseResume = async () => {
+    if (!window.go) return;
+    setError('');
+    try {
+      if (isPaused) {
+        await RecordService().ResumeRecording();
+      } else {
+        await RecordService().PauseRecording();
+      }
+    } catch (e: any) {
+      setError(typeof e === 'string' ? e : e?.message || (isPaused ? '繼續錄音失敗' : '暫停錄音失敗'));
     }
   };
 
@@ -173,13 +199,18 @@ export const ControlPanel: React.FC = () => {
           ● 開始錄音
         </button>
       ) : (
-        <button
-          style={STYLE.stopBtn}
-          onClick={handleStop}
-          disabled={stopping}
-        >
-          {stopping ? '正在儲存...' : '■ 停止錄音'}
-        </button>
+        <>
+          <button style={STYLE.pauseBtn} onClick={handlePauseResume} disabled={stopping}>
+            {isPaused ? '▶ 繼續錄音' : 'Ⅱ 暫停錄音'}
+          </button>
+          <button
+            style={STYLE.stopBtn}
+            onClick={handleStop}
+            disabled={stopping}
+          >
+            {stopping ? '正在儲存...' : '■ 停止並處理'}
+          </button>
+        </>
       )}
 
       {/* Import audio file — available when not recording */}

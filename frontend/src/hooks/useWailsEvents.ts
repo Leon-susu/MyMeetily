@@ -43,6 +43,8 @@ declare global {
         };
         RecordService: {
           StartRecording: (mic: string, speaker: string) => Promise<void>;
+          PauseRecording: () => Promise<void>;
+          ResumeRecording: () => Promise<void>;
           StopRecording: () => Promise<string>;
           IsRecording: () => Promise<boolean>;
           GetElapsed: () => Promise<number>;
@@ -141,6 +143,14 @@ export function useWailsEvents() {
       dispatch({ type: 'RECORDING_STOPPED' });
     });
 
+    window.runtime.EventsOn('record:paused', () => {
+      dispatch({ type: 'RECORDING_PAUSED' });
+    });
+
+    window.runtime.EventsOn('record:resumed', () => {
+      dispatch({ type: 'RECORDING_RESUMED' });
+    });
+
     window.runtime.EventsOn('record:peaklevel', (payload: PeakLevelPayload) => {
       dispatch({ type: 'SET_PEAK_LEVEL', level: payload.level, elapsed: payload.elapsed });
     });
@@ -176,6 +186,8 @@ export function useWailsEvents() {
       window.runtime.EventsOff('settings:changed');
       window.runtime.EventsOff('record:started');
       window.runtime.EventsOff('record:stopped');
+      window.runtime.EventsOff('record:paused');
+      window.runtime.EventsOff('record:resumed');
       window.runtime.EventsOff('record:peaklevel');
       window.runtime.EventsOff('record:transcript');
       window.runtime.EventsOff('pipeline:progress');

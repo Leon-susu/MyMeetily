@@ -831,6 +831,11 @@ func (s *RecordService) StopRecording() (string, error) {
 		s.cancel()
 	}
 
+	activeDuration := time.Duration(0)
+	if s.recorder != nil {
+		activeDuration = s.recorder.Elapsed()
+	}
+
 	// Stop recorder
 	if s.recorder != nil {
 		s.recorder.Stop()
@@ -849,10 +854,36 @@ func (s *RecordService) StopRecording() (string, error) {
 	// Emit stopped event
 	runtime.EventsEmit(s.ctx, "record:stopped", map[string]interface{}{
 		"outputPath": outputPath,
-		"duration":   time.Since(s.startTime).Seconds(),
+		"duration":   activeDuration.Seconds(),
 	})
 
 	return outputPath, nil
+}
+
+func (s *RecordService) PauseRecording() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.running || s.recorder == nil {
+		return fmt.Errorf("未在錄音")
+	}
+	if err := s.recorder.Pause(); err != nil {
+		return fmt.Errorf("暫停錄音失敗: %w", err)
+	}
+	runtime.EventsEmit(s.ctx, "record:paused")
+	return nil
+}
+
+func (s *RecordService) ResumeRecording() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.running || s.recorder == nil {
+		return fmt.Errorf("未在錄音")
+	}
+	if err := s.recorder.Resume(); err != nil {
+		return fmt.Errorf("繼續錄音失敗: %w", err)
+	}
+	runtime.EventsEmit(s.ctx, "record:resumed")
+	return nil
 }
 
 func (s *RecordService) IsRecording() bool {
@@ -867,7 +898,10 @@ func (s *RecordService) GetElapsed() float64 {
 	if !s.running {
 		return 0
 	}
-	return time.Since(s.startTime).Seconds()
+	if s.recorder == nil {
+		return 0
+	}
+	return s.recorder.Elapsed().Seconds()
 }
 
 // pushLoop runs in the background, pushing peak level and transcript data
@@ -888,7 +922,7 @@ func (s *RecordService) pushLoop(ctx context.Context) {
 
 			// Push peak level
 			peakLevel := s.recorder.PeakLevel()
-			elapsed := time.Since(s.startTime).Seconds()
+			elapsed := s.recorder.Elapsed().Seconds()
 			runtime.EventsEmit(s.ctx, "record:peaklevel", map[string]interface{}{
 				"level":   peakLevel,
 				"elapsed": elapsed,

@@ -10,6 +10,14 @@ export function IsRecording() {
   return window['go']['main']['RecordService']['IsRecording']();
 }
 
+export function PauseRecording() {
+  return window['go']['main']['RecordService']['PauseRecording']();
+}
+
+export function ResumeRecording() {
+  return window['go']['main']['RecordService']['ResumeRecording']();
+}
+
 export function StartRecording(arg1, arg2) {
   return window['go']['main']['RecordService']['StartRecording'](arg1, arg2);
 }

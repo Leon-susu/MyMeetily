@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -35,6 +36,9 @@ type wasapiRecorder struct {
 	outputPath       string
 	running          bool
 	startedAt        time.Time
+	pausedAt         time.Time
+	pausedDuration   time.Duration
+	paused           atomic.Bool
 	cancel           context.CancelFunc
 	sessions         []*wasapiCaptureSession
 	tempDir          string
@@ -54,6 +58,7 @@ type wasapiCaptureSession struct {
 	err         error
 	micPeak     *float32                  // pointer to recorder.peakLevel, nil for speaker sessions
 	onAudioData func([]byte, AudioFormat) // tee callback for live transcription
+	paused      *atomic.Bool
 }
 
 func NewWASAPIRecorder(cfg RecorderConfig) (Recorder, error) {
@@ -97,6 +102,7 @@ func (r *wasapiRecorder) Start() error {
 			done:        make(chan struct{}),
 			micPeak:     &r.peakLevel,
 			onAudioData: r.onAudioData,
+			paused:      &r.paused,
 		},
 	}
 	if strings.TrimSpace(r.speakerDevice) != "" {
@@ -109,6 +115,7 @@ func (r *wasapiRecorder) Start() error {
 			filePath:  filepath.Join(tempDir, "speaker.wav"),
 			ready:     make(chan error, 1),
 			done:      make(chan struct{}),
+			paused:    &r.paused,
 		})
 	}
 
@@ -136,6 +143,40 @@ func (r *wasapiRecorder) Start() error {
 
 	r.running = true
 	r.startedAt = time.Now()
+	r.pausedAt = time.Time{}
+	r.pausedDuration = 0
+	r.paused.Store(false)
+	return nil
+}
+
+func (r *wasapiRecorder) Pause() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.running {
+		return fmt.Errorf("not recording")
+	}
+	if r.paused.Load() {
+		return nil
+	}
+	r.pausedAt = time.Now()
+	r.paused.Store(true)
+	r.peakLevel = 0
+	r.speakerPeakLevel = 0
+	return nil
+}
+
+func (r *wasapiRecorder) Resume() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.running {
+		return fmt.Errorf("not recording")
+	}
+	if !r.paused.Load() {
+		return nil
+	}
+	r.pausedDuration += time.Since(r.pausedAt)
+	r.pausedAt = time.Time{}
+	r.paused.Store(false)
 	return nil
 }
 
@@ -151,6 +192,11 @@ func (r *wasapiRecorder) Stop() error {
 	tempDir := r.tempDir
 	outputPath := r.outputPath
 	r.running = false
+	if r.paused.Load() {
+		r.pausedDuration += time.Since(r.pausedAt)
+		r.pausedAt = time.Time{}
+		r.paused.Store(false)
+	}
 	r.cancel = nil
 	r.mu.Unlock()
 
@@ -194,13 +240,24 @@ func (r *wasapiRecorder) IsRunning() bool {
 	return r.running
 }
 
+func (r *wasapiRecorder) IsPaused() bool {
+	return r.paused.Load()
+}
+
 func (r *wasapiRecorder) Elapsed() time.Duration {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if !r.running {
 		return 0
 	}
-	return time.Since(r.startedAt)
+	elapsed := time.Since(r.startedAt) - r.pausedDuration
+	if r.paused.Load() {
+		elapsed -= time.Since(r.pausedAt)
+	}
+	if elapsed < 0 {
+		return 0
+	}
+	return elapsed
 }
 
 func (r *wasapiRecorder) OutputPath() string {
@@ -279,7 +336,7 @@ func (s *wasapiCaptureSession) capture(ctx context.Context) error {
 		default:
 		}
 
-		if err := captureWASAPIPacket(captureClient, writer, format, s.micPeak, s.onAudioData); err != nil {
+		if err := captureWASAPIPacket(captureClient, writer, format, s.micPeak, s.onAudioData, s.paused); err != nil {
 			return err
 		}
 
@@ -347,7 +404,7 @@ func initializeWASAPIAudioClient(device *wca.IMMDevice, loopback bool) (*wca.IAu
 	return client, format, latency, nil
 }
 
-func captureWASAPIPacket(captureClient *wca.IAudioCaptureClient, writer *wavFileWriter, format *wca.WAVEFORMATEX, peakLevel *float32, onAudioData func([]byte, AudioFormat)) error {
+func captureWASAPIPacket(captureClient *wca.IAudioCaptureClient, writer *wavFileWriter, format *wca.WAVEFORMATEX, peakLevel *float32, onAudioData func([]byte, AudioFormat), paused *atomic.Bool) error {
 	var data *byte
 	var frames uint32
 	var flags uint32
@@ -361,6 +418,12 @@ func captureWASAPIPacket(captureClient *wca.IAudioCaptureClient, writer *wavFile
 		return nil
 	}
 	defer captureClient.ReleaseBuffer(frames)
+	if paused != nil && paused.Load() {
+		if peakLevel != nil {
+			*peakLevel = 0
+		}
+		return nil
+	}
 
 	bytesPerFrame := int(format.NBlockAlign)
 	byteCount := int(frames) * bytesPerFrame

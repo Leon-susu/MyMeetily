@@ -24,6 +24,7 @@ export interface AppState {
 
   // Recording
   isRecording: boolean;
+  isPaused: boolean;
   elapsed: number;
   peakLevel: number;
   transcripts: TranscriptLine[];
@@ -56,6 +57,7 @@ export const initialState: AppState = {
   deps: null,
   appInfo: null,
   isRecording: false,
+  isPaused: false,
   elapsed: 0,
   peakLevel: 0,
   transcripts: [],
@@ -78,6 +80,8 @@ export type AppAction =
   | { type: 'SET_APP_INFO'; appInfo: AppState['appInfo'] }
   | { type: 'RECORDING_STARTED'; outputPath: string }
   | { type: 'RECORDING_STOPPED' }
+  | { type: 'RECORDING_PAUSED' }
+  | { type: 'RECORDING_RESUMED' }
   | { type: 'SET_PEAK_LEVEL'; level: number; elapsed: number }
   | { type: 'ADD_TRANSCRIPT'; text: string }
   | { type: 'SET_CURRENT_STAGE'; stage: string }
@@ -121,6 +125,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         phase: 'recording',
         isRecording: true,
+        isPaused: false,
         elapsed: 0,
         peakLevel: 0,
         transcripts: [],
@@ -128,7 +133,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
 
     case 'RECORDING_STOPPED':
-      return { ...state, isRecording: false };
+      return { ...state, isRecording: false, isPaused: false };
+
+    case 'RECORDING_PAUSED':
+      return { ...state, isPaused: true, peakLevel: 0 };
+
+    case 'RECORDING_RESUMED':
+      return { ...state, isPaused: false };
 
     case 'SET_PEAK_LEVEL':
       return { ...state, peakLevel: action.level, elapsed: action.elapsed };

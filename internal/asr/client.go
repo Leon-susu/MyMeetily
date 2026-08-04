@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -89,6 +90,7 @@ func (c *Client) transcribeRange(ctx context.Context, audioPath, language string
 		"-t", strconv.Itoa(recommendedThreads()),
 		"-oj", // JSON output
 	}
+	args = append(args, vulkanSafeDecodeArgs(c.binary)...)
 	if offsetMS > 0 {
 		args = append(args, "-ot", strconv.FormatInt(offsetMS, 10))
 	}
@@ -161,6 +163,18 @@ func (c *Client) transcribeRange(ctx context.Context, audioPath, language string
 		result.Duration = result.Segments[len(result.Segments)-1].End
 	}
 	return result, nil
+}
+
+// vulkanSafeDecodeArgs avoids a Windows stack overflow observed in
+// whisper.cpp v1.8.5's Vulkan beam search on AMD integrated GPUs. A beam size
+// of one keeps Vulkan acceleration and flash attention enabled while using the
+// stable greedy path. CUDA and CPU packages are left unchanged.
+func vulkanSafeDecodeArgs(binaryPath string) []string {
+	vulkanDLL := filepath.Join(filepath.Dir(binaryPath), "ggml-vulkan.dll")
+	if info, err := os.Stat(vulkanDLL); err == nil && !info.IsDir() {
+		return []string{"-bs", "1", "-bo", "1"}
+	}
+	return nil
 }
 
 func recommendedThreads() int {

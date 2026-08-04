@@ -44,9 +44,19 @@ try {
     }
 
     $whisperCli = Join-Path $taskRoot "whisper-cli.exe"
-    $helpOutput = (& $whisperCli --help 2>&1) -join "`n"
-    if ($LASTEXITCODE -ne 0) {
-        throw "whisper-cli 啟動失敗（結束碼 $LASTEXITCODE）：`n$helpOutput"
+    $previousErrorAction = $ErrorActionPreference
+    try {
+        # whisper.cpp writes backend discovery to stderr even on success.
+        # Windows PowerShell 5 turns redirected native stderr into ErrorRecord
+        # objects when Stop is active, so capture it under Continue explicitly.
+        $ErrorActionPreference = "Continue"
+        $helpOutput = (& $whisperCli --help 2>&1) -join "`n"
+        $helpExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorAction
+    }
+    if ($helpExitCode -ne 0) {
+        throw "whisper-cli 啟動失敗（結束碼 $helpExitCode）：`n$helpOutput"
     }
     Write-Host "基本啟動驗證通過。" -ForegroundColor Green
 
@@ -57,9 +67,16 @@ try {
         $model = Get-Item -LiteralPath $ModelPath -ErrorAction Stop
         $audio = Get-Item -LiteralPath $AudioPath -ErrorAction Stop
         $outputBase = Join-Path $taskRoot "vulkan-probe"
-        $probeOutput = (& $whisperCli -m $model.FullName -f $audio.FullName -l zh -otxt -of $outputBase 2>&1) -join "`n"
-        if ($LASTEXITCODE -ne 0) {
-            throw "AMD Vulkan 實際轉錄失敗（結束碼 $LASTEXITCODE）：`n$probeOutput"
+        $previousErrorAction = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            $probeOutput = (& $whisperCli -m $model.FullName -f $audio.FullName -l zh -bs 1 -bo 1 -otxt -of $outputBase 2>&1) -join "`n"
+            $probeExitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $previousErrorAction
+        }
+        if ($probeExitCode -ne 0) {
+            throw "AMD Vulkan 實際轉錄失敗（結束碼 $probeExitCode）：`n$probeOutput"
         }
         if ($probeOutput -match "no GPU found") {
             throw "引擎啟動成功，但沒有找到 GPU：`n$probeOutput"

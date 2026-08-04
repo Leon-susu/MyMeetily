@@ -61,3 +61,24 @@ func TestRecommendedThreadsIsBounded(t *testing.T) {
 		t.Fatalf("recommendedThreads=%d, want 1..12", threads)
 	}
 }
+
+func TestVulkanSafeDecodeArgs(t *testing.T) {
+	directory := t.TempDir()
+	binaryPath := filepath.Join(directory, "whisper-cli.exe")
+	if args := vulkanSafeDecodeArgs(binaryPath); len(args) != 0 {
+		t.Fatalf("CPU engine args=%v, want none", args)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "ggml-vulkan.dll"), []byte("test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	args := vulkanSafeDecodeArgs(binaryPath)
+	want := []string{"-bs", "1", "-bo", "1"}
+	if len(args) != len(want) {
+		t.Fatalf("Vulkan engine args=%v, want %v", args, want)
+	}
+	for index := range want {
+		if args[index] != want[index] {
+			t.Fatalf("Vulkan engine args=%v, want %v", args, want)
+		}
+	}
+}

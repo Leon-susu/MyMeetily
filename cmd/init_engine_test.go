@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/mymeetily/mymeetily/internal/hardware"
 	"github.com/mymeetily/mymeetily/internal/layout"
 )
 
@@ -43,6 +44,7 @@ func TestWhisperAssetName(t *testing.T) {
 	tests := map[string]string{
 		"cpu":         "whisper-bin-x64.zip",
 		"blas":        "whisper-blas-bin-x64.zip",
+		"vulkan":      "whisper-vulkan-bin-x64.zip",
 		"cuda-11.8":   "whisper-cublas-11.8.0-bin-x64.zip",
 		"cuda-12.4":   "whisper-cublas-12.4.0-bin-x64.zip",
 		"cublas-12.4": "whisper-cublas-12.4.0-bin-x64.zip",
@@ -175,5 +177,14 @@ func createZipArchive(t *testing.T, zipPath string, entries map[string]string) {
 	}
 	if err := file.Close(); err != nil {
 		t.Fatalf("close zip file: %v", err)
+	}
+}
+
+func TestRecommendedWhisperVariant(t *testing.T) {
+	if got := recommendedWhisperVariant(hardware.Profile{HasNVIDIA: true, HasAMD: true}); got != "cuda-12.4" {
+		t.Fatalf("NVIDIA variant = %q, want cuda-12.4", got)
+	}
+	if got := recommendedWhisperVariant(hardware.Profile{HasAMD: true}); got != "cpu" {
+		t.Fatalf("AMD fallback variant = %q, want cpu", got)
 	}
 }

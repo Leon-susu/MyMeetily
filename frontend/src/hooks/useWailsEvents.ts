@@ -63,6 +63,7 @@ declare global {
       EventsOff: (event: string) => void;
       EventsOnce: (event: string, callback: (...args: any[]) => void) => void;
       EventsEmit: (event: string, data?: any) => void;
+      BrowserOpenURL: (url: string) => void;
     };
   }
 }

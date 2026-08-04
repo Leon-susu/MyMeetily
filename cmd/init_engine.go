@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mymeetily/mymeetily/internal/hardware"
 	"github.com/mymeetily/mymeetily/internal/layout"
 )
 
@@ -44,14 +45,14 @@ func runInitEngineCommand(args []string) error {
 
 	opts := initEngineOptions{
 		whisperVersion: defaultWhisperVersion,
-		whisperVariant: "cuda-12.4",
+		whisperVariant: "auto",
 	}
 
 	fs := flag.NewFlagSet("init-engine", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
 	fs.BoolVar(&opts.force, "force", false, "强制覆盖已存在的引擎文件")
 	fs.StringVar(&opts.whisperVersion, "whisper-version", opts.whisperVersion, "whisper.cpp 版本，如 v1.8.5 或 latest")
-	fs.StringVar(&opts.whisperVariant, "whisper-variant", opts.whisperVariant, "whisper.cpp 变体: cpu | blas | cuda-11.8 | cuda-12.4")
+	fs.StringVar(&opts.whisperVariant, "whisper-variant", opts.whisperVariant, "whisper.cpp 變體: auto | cpu | blas | vulkan | cuda-11.8 | cuda-12.4")
 	fs.StringVar(&opts.whisperZip, "whisper-zip", "", "使用本地 whisper.cpp zip 包，跳过在线下载")
 	fs.Usage = func() {
 		fmt.Println("用法:")
@@ -59,6 +60,7 @@ func runInitEngineCommand(args []string) error {
 		fmt.Println()
 		fmt.Println("示例:")
 		fmt.Println("  go run . init-engine --whisper-variant cuda-12.4")
+		fmt.Println("  go run . init-engine --whisper-variant vulkan --whisper-zip C:\\path\\to\\whisper-vulkan-bin-x64.zip")
 		fmt.Println("  go run . init-engine --whisper-version v1.7.6 --whisper-variant cuda-12.4")
 		fmt.Println("  go run . init-engine --whisper-zip llmengine/whispercpp/Release/whisper-cublas-12.4.0-bin-x64.zip")
 		fmt.Println()
@@ -93,6 +95,17 @@ func runInitEngineCommand(args []string) error {
 }
 
 func installWhisperEngine(appRoot string, opts initEngineOptions) error {
+	profile := hardware.Detect()
+	requestedVariant := strings.ToLower(strings.TrimSpace(opts.whisperVariant))
+	if requestedVariant == "" || requestedVariant == "auto" {
+		opts.whisperVariant = recommendedWhisperVariant(profile)
+		fmt.Printf("自動偵測顯示硬體：%s\n", describeGPUs(profile.GPUs))
+		fmt.Printf("自動選擇 whisper.cpp 引擎：%s\n", opts.whisperVariant)
+		if profile.HasAMD {
+			fmt.Println("注意：偵測到 AMD Radeon；官方 Windows Release 尚未提供 Vulkan 壓縮包，目前先使用 CPU 引擎。")
+			fmt.Println("若已有可信任的 Vulkan 建置，可使用 --whisper-variant vulkan --whisper-zip <檔案> 安裝。")
+		}
+	}
 	version := normalizeReleaseVersion(opts.whisperVersion)
 	asset, err := whisperAssetName(opts.whisperVariant)
 	if err != nil {
@@ -102,6 +115,9 @@ func installWhisperEngine(appRoot string, opts initEngineOptions) error {
 	destDir := layout.WhisperEngineDir(appRoot)
 	metadataPath := filepath.Join(destDir, engineMetadataName)
 	autoZipPath := filepath.Join(destDir, asset)
+	if strings.EqualFold(strings.TrimSpace(opts.whisperVariant), "vulkan") && strings.TrimSpace(opts.whisperZip) == "" && !fileExists(autoZipPath) {
+		return fmt.Errorf("官方 whisper.cpp Windows Release 尚未提供 Vulkan 壓縮包；請以 --whisper-zip 指定可信任的 Vulkan 建置檔，或改用 --whisper-variant cpu")
+	}
 	source, err := resolveEngineArchiveSource(url, opts.whisperZip, autoZipPath)
 	if err != nil {
 		return err
@@ -463,6 +479,8 @@ func whisperAssetName(variant string) (string, error) {
 		return "whisper-bin-x64.zip", nil
 	case "blas":
 		return "whisper-blas-bin-x64.zip", nil
+	case "vulkan":
+		return "whisper-vulkan-bin-x64.zip", nil
 	case "cuda-11.8", "cuda11.8", "cublas-11.8":
 		return "whisper-cublas-11.8.0-bin-x64.zip", nil
 	case "cuda-12.4", "cuda12.4", "cublas-12.4":
@@ -470,6 +488,20 @@ func whisperAssetName(variant string) (string, error) {
 	default:
 		return "", fmt.Errorf("不支持的 whisper 变体: %s", variant)
 	}
+}
+
+func recommendedWhisperVariant(profile hardware.Profile) string {
+	if profile.HasNVIDIA {
+		return "cuda-12.4"
+	}
+	return "cpu"
+}
+
+func describeGPUs(gpus []string) string {
+	if len(gpus) == 0 {
+		return "未取得顯示卡資料"
+	}
+	return strings.Join(gpus, "、")
 }
 
 func normalizeReleaseVersion(version string) string {

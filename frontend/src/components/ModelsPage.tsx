@@ -133,7 +133,14 @@ export const ModelsPage: React.FC = () => {
         {hardware && <div style={{ padding: 16, marginBottom: 16, borderRadius: 10, border: '1px solid #bfdbfe', background: '#eff6ff', color: '#1e3a8a' }}>
           <div style={{ fontWeight: 700 }}>硬體建議</div>
           <div style={{ fontSize: 13, marginTop: 5 }}>{hardware.recommendation}</div>
-          <div style={{ fontSize: 11, marginTop: 7, color: '#64748b' }}>CPU 執行緒：{hardware.cpuThreads} · GPU：{hardware.gpus.length ? hardware.gpus.join('、') : '未取得資料'}</div>
+          {hardware.driverAdvice && <div style={{ fontSize: 12, marginTop: 8, color: '#475569' }}>{hardware.driverAdvice}</div>}
+          <div style={{ fontSize: 11, marginTop: 7, color: '#64748b' }}>
+            建議引擎：{(hardware.recommendedEngine || 'cpu').toUpperCase()} · Vulkan runtime：{hardware.vulkanRuntime ? '已偵測' : '未偵測'} · CPU 執行緒：{hardware.cpuThreads}<br />
+            GPU：{hardware.gpus.length ? hardware.gpus.join('、') : '未取得資料'}
+          </div>
+          {hardware.driverUrl && <button onClick={() => window.runtime.BrowserOpenURL(hardware.driverUrl)} style={{ ...secondaryButton, marginTop: 10, color: '#1d4ed8', borderColor: '#93c5fd' }}>
+            開啟官方顯示卡驅動頁面
+          </button>}
         </div>}
 
         <div style={{ marginBottom: 14, padding: '10px 12px', borderRadius: 8, background: '#f8fafc', color: '#64748b', fontSize: 12 }}>

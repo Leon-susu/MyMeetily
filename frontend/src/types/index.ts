@@ -67,8 +67,14 @@ export interface HardwareProfile {
   architecture: string;
   gpus: string[];
   hasNvidia: boolean;
+  hasAmd: boolean;
+  hasIntel: boolean;
+  vulkanRuntime: boolean;
+  recommendedEngine: string;
   recommendedModel: string;
   recommendation: string;
+  driverAdvice: string;
+  driverUrl: string;
 }
 
 export interface ModelOperationProgress {

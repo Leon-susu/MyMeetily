@@ -21,11 +21,50 @@ function Invoke-Checked {
     }
 }
 
+function Enable-MsvcEnvironment {
+    if (Get-Command cl.exe -ErrorAction SilentlyContinue) {
+        return
+    }
+
+    $vswhereCandidates = @(
+        (Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"),
+        (Join-Path $env:ProgramFiles "Microsoft Visual Studio\Installer\vswhere.exe")
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) }
+    $vswhere = $vswhereCandidates | Select-Object -First 1
+    if (-not $vswhere) {
+        throw "找不到 vswhere.exe。請安裝 Visual Studio 2022 C++ Build Tools。"
+    }
+
+    $installationPath = (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
+    if (-not $installationPath) {
+        throw "找不到包含 MSVC x64 工具的 Visual Studio 2022。"
+    }
+    $devCmd = Join-Path $installationPath "Common7\Tools\VsDevCmd.bat"
+    if (-not (Test-Path -LiteralPath $devCmd -PathType Leaf)) {
+        throw "找不到 Visual Studio 開發環境腳本：$devCmd"
+    }
+
+    Write-Host "載入 Visual Studio 2022 x64 C++ 建置環境..."
+    $environmentLines = & cmd.exe /s /c "`"$devCmd`" -no_logo -arch=x64 && set"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Visual Studio 開發環境初始化失敗（結束碼 $LASTEXITCODE）。"
+    }
+    foreach ($line in $environmentLines) {
+        if ($line -match '^([^=][^=]*)=(.*)$') {
+            [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], "Process")
+        }
+    }
+    if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
+        throw "Visual Studio 環境載入後仍找不到 cl.exe。"
+    }
+}
+
 foreach ($commandName in @("git", "cmake")) {
     if (-not (Get-Command $commandName -ErrorAction SilentlyContinue)) {
         throw "找不到 $commandName。請先安裝 Git、CMake 與 Visual Studio 2022 C++ Build Tools。"
     }
 }
+Enable-MsvcEnvironment
 
 $outputRoot = [IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null

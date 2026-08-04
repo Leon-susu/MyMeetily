@@ -59,9 +59,9 @@ function Enable-MsvcEnvironment {
     }
 }
 
-foreach ($commandName in @("git", "cmake")) {
+foreach ($commandName in @("git", "cmake", "ninja")) {
     if (-not (Get-Command $commandName -ErrorAction SilentlyContinue)) {
-        throw "找不到 $commandName。請先安裝 Git、CMake 與 Visual Studio 2022 C++ Build Tools。"
+        throw "找不到 $commandName。請先安裝 Git、CMake、Ninja 與 Visual Studio 2022 C++ Build Tools。"
     }
 }
 Enable-MsvcEnvironment
@@ -113,7 +113,7 @@ try {
     Invoke-Checked -FilePath "cmake" -Arguments @(
         "-S", $sourceRoot,
         "-B", $buildRoot,
-        "-A", "x64",
+        "-G", "Ninja",
         "-DCMAKE_BUILD_TYPE=Release",
         "-DBUILD_SHARED_LIBS=ON",
         "-DGGML_VULKAN=ON",
@@ -124,7 +124,10 @@ try {
     )
     Invoke-Checked -FilePath "cmake" -Arguments @("--build", $buildRoot, "--config", "Release", "--parallel")
 
-    $binaryRoot = Join-Path $buildRoot "bin\Release"
+    $binaryRoot = Join-Path $buildRoot "bin"
+    if (-not (Test-Path -LiteralPath (Join-Path $binaryRoot "whisper-cli.exe") -PathType Leaf)) {
+        $binaryRoot = Join-Path $buildRoot "bin\Release"
+    }
     $requiredFiles = @(
         "whisper-cli.exe",
         "whisper.dll",
